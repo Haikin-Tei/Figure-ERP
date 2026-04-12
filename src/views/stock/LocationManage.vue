@@ -20,20 +20,26 @@
 
         <!-- 查询按钮 -->
         <el-button type="primary" @click="handleSearch">
-          <el-icon><Search /></el-icon>
+          <el-icon>
+            <Search />
+          </el-icon>
           查询
         </el-button>
 
         <!-- 重置按钮 -->
         <el-button @click="handleReset">
-          <el-icon><RefreshLeft /></el-icon>
+          <el-icon>
+            <RefreshLeft />
+          </el-icon>
           重置
         </el-button>
 
         <div class="flex-grow"></div>
 
         <el-button type="primary" @click="handleAdd">
-          <el-icon><Plus /></el-icon>
+          <el-icon>
+            <Plus />
+          </el-icon>
           新增仓库
         </el-button>
       </div>
@@ -74,26 +80,20 @@
       </el-table-column>
     </el-table>
 
+    <!-- <BaseTable :data="paginatedData" :columns="columns" :loading="loading" :pagination="{ total: filteredData.length }"
+      @update:page="handleCurrentChange" @update:limit="handleSizeChange">
+
+    </BaseTable> -->
+
     <!-- 3. 分页器 -->
     <div class="pagination-container">
-      <el-pagination
-        v-model:current-page="currentPage"
-        v-model:page-size="pageSize"
-        :page-sizes="[10, 20, 50, 100]"
-        layout="total, sizes, prev, pager, next, jumper"
-        :total="filteredData.length"
-        @size-change="handleSizeChange"
-        @current-change="handleCurrentChange"
-      />
+      <el-pagination v-model:current-page="currentPage" v-model:page-size="pageSize" :page-sizes="[10, 20, 50, 100]"
+        layout="total, sizes, prev, pager, next, jumper" :total="filteredData.length" @size-change="handleSizeChange"
+        @current-change="handleCurrentChange" />
     </div>
 
     <!-- 4. 详情弹窗 -->
-    <el-dialog
-      v-model="detailVisible"
-      title="仓库详情"
-      width="500px"
-      :close-on-click-modal="false"
-    >
+    <el-dialog v-model="detailVisible" title="仓库详情" width="500px" :close-on-click-modal="false">
       <el-descriptions :column="1" border>
         <el-descriptions-item label="仓库代码">
           {{ currentDetail.warehouseCode }}
@@ -119,23 +119,10 @@
     </el-dialog>
 
     <!-- 5. 新增/编辑弹窗 -->
-    <el-dialog
-      v-model="formVisible"
-      :title="isEdit ? '编辑仓库信息' : '新增仓库'"
-      width="500px"
-      :close-on-click-modal="false"
-    >
-      <el-form
-        ref="formRef"
-        :model="form"
-        :rules="rules"
-        label-width="100px"
-      >
+    <el-dialog v-model="formVisible" :title="isEdit ? '编辑仓库信息' : '新增仓库'" width="500px" :close-on-click-modal="false">
+      <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
         <el-form-item label="仓库代码" prop="warehouseCode">
-          <el-input
-            v-model="form.warehouseCode"
-            placeholder="请输入仓库代码"
-          />
+          <el-input v-model="form.warehouseCode" placeholder="请输入仓库代码" />
         </el-form-item>
 
         <el-form-item label="仓库名称" prop="warehouseName">
@@ -168,6 +155,7 @@
 import { ref, computed, reactive } from 'vue'
 import { Plus, Search, RefreshLeft } from '@element-plus/icons-vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
+import BaseTable from '@/components/common/BaseTable.vue'
 
 // --- 1. 模拟数据 ---
 const warehouseList = ref([
@@ -201,7 +189,8 @@ const form = reactive({
   warehouseCode: '',
   warehouseName: '',
   warehouseAddress: '',
-  status: ''
+  status: '',
+  isReturn: 'N'
 })
 
 // 表单校验规则
