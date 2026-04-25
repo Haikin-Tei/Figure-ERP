@@ -1,7 +1,7 @@
 <!-- src/components/common/BaseTable.vue -->
 <template>
   <div class="base-table">
-    <el-table :data="data" v-bind="$attrs" style="width: 100%" v-loading="loading">
+    <el-table :data="data" v-bind="$attrs" style="width: 100%" v-loading="loading" border>
       <!-- 1. 默认插槽：用于插入 el-table-column (如 selection, index 等) -->
       <slot></slot>
 

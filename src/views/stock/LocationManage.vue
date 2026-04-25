@@ -45,45 +45,30 @@
       </div>
     </el-card>
 
-    <!-- 2. 数据展示表格 -->
-    <el-table :data="paginatedData" stripe style="width: 100%" border v-loading="loading">
-      <el-table-column prop="warehouseCode" label="仓库代码" width="120" align="center" />
+    <BaseTable :data="paginatedData" :columns="columns" :loading="loading" @update:page="handleCurrentChange"
+      @update:limit="handleSizeChange">
+      <!-- 插槽：渲染“当前状态”列 -->
+      <template #status="scope">
+        <el-tag :type="getStatusTag(scope.row.status)">
+          {{ getStatusText(scope.row.status) }}
+        </el-tag>
+      </template>
+      <template #action="scope">
+        <!-- 查看详情 -->
+        <el-button link type="info" size="small" @click="handleViewDetails(scope.row)">
+          查看详情
+        </el-button>
+        <!-- 编辑 -->
+        <el-button link type="primary" size="small" @click="handleEdit(scope.row)">
+          编辑
+        </el-button>
+        <!-- 删除 -->
+        <el-button link type="danger" size="small">
+          删除
+        </el-button>
+      </template>
+    </BaseTable>
 
-      <!-- 修改：移除了内部的 el-tag，仅显示纯文本名称 -->
-      <el-table-column prop="warehouseName" label="仓库名称" min-width="180" />
-
-      <el-table-column prop="warehouseAddress" label="仓库地址" min-width="250" show-overflow-tooltip />
-
-      <el-table-column prop="status" label="当前状态" width="120" align="center">
-        <template #default="scope">
-          <el-tag :type="getStatusTag(scope.row.status)">
-            {{ getStatusText(scope.row.status) }}
-          </el-tag>
-        </template>
-      </el-table-column>
-
-      <el-table-column label="操作" width="220" align="center" fixed="right">
-        <template #default="scope">
-          <!-- 查看详情 -->
-          <el-button link type="info" size="small" @click="handleViewDetails(scope.row)">
-            查看详情
-          </el-button>
-          <!-- 编辑 -->
-          <el-button link type="primary" size="small" @click="handleEdit(scope.row)">
-            编辑
-          </el-button>
-          <!-- 删除 -->
-          <el-button link type="danger" size="small">
-            删除
-          </el-button>
-        </template>
-      </el-table-column>
-    </el-table>
-
-    <!-- <BaseTable :data="paginatedData" :columns="columns" :loading="loading" :pagination="{ total: filteredData.length }"
-      @update:page="handleCurrentChange" @update:limit="handleSizeChange">
-
-    </BaseTable> -->
 
     <!-- 3. 分页器 -->
     <div class="pagination-container">
@@ -163,6 +148,52 @@ const warehouseList = ref([
   { warehouseCode: '3102', warehouseName: '上海退货库', warehouseAddress: '上海市浦东新区新川路180号', isReturn: 'Y', status: 'A' },
   { warehouseCode: '1101', warehouseName: '北京库', warehouseAddress: '北京市海淀区清华紫光大厦', isReturn: 'N', status: 'C' },
   { warehouseCode: '4401', warehouseName: '广州库', warehouseAddress: '广州市荔湾区黄沙大道144号', isReturn: 'N', status: 'D' },
+])
+interface Column {
+  prop: string        // 字段名
+  label: string       // 表头名
+  width?: string | number
+  minWidth?: string | number
+  align?: 'left' | 'center' | 'right'
+  fixed?: boolean | 'left' | 'right'
+  formatter?: (row: any, col: Column) => string // 格式化函数
+}
+// 定义表格列配置
+const columns = ref<Column[]>([
+  {
+    prop: 'warehouseCode',
+    label: '仓库代码',
+    width: 120,
+    align: 'center'
+  },
+  {
+    prop: 'warehouseName',
+    label: '仓库名称',
+    minWidth: 180
+  },
+  {
+    prop: 'warehouseAddress',
+    label: '仓库地址',
+    minWidth: 250,
+    // 模拟格式化：如果地址太长，这里可以做截取处理，或者直接靠组件的 show-overflow-tooltip
+    formatter: (row) => row.warehouseAddress
+  },
+  {
+    prop: 'status',
+    label: '当前状态',
+    width: 120,
+    align: 'center'
+    // 注意：这里没有 formatter，因为我们需要渲染 el-tag，
+    // 所以会在 template 中通过插槽 #status 来处理
+  },
+  {
+    prop: 'action', // 虚拟字段，不对应具体数据
+    label: '操作',
+    width: 220,
+    align: 'center',
+    fixed: 'right'
+    // 同样，操作按钮通过插槽 #action 渲染
+  }
 ])
 
 // --- 2. 筛选状态 ---
