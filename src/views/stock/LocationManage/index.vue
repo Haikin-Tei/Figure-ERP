@@ -141,6 +141,7 @@ import { ref, computed, reactive } from 'vue'
 import { Plus, Search, RefreshLeft } from '@element-plus/icons-vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import BaseTable from '@/components/common/BaseTable.vue'
+import type { Column } from './index.ts'
 
 // --- 1. 模拟数据 ---
 const warehouseList = ref([
@@ -149,15 +150,7 @@ const warehouseList = ref([
   { warehouseCode: '1101', warehouseName: '北京库', warehouseAddress: '北京市海淀区清华紫光大厦', isReturn: 'N', status: 'C' },
   { warehouseCode: '4401', warehouseName: '广州库', warehouseAddress: '广州市荔湾区黄沙大道144号', isReturn: 'N', status: 'D' },
 ])
-interface Column {
-  prop: string        // 字段名
-  label: string       // 表头名
-  width?: string | number
-  minWidth?: string | number
-  align?: 'left' | 'center' | 'right'
-  fixed?: boolean | 'left' | 'right'
-  formatter?: (row: any, col: Column) => string // 格式化函数
-}
+
 // 定义表格列配置
 const columns = ref<Column[]>([
   {
