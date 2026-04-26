@@ -46,7 +46,7 @@
     </el-card>
 
     <BaseTable :data="paginatedData" :columns="columns" :loading="loading" @update:page="handleCurrentChange"
-      @update:limit="handleSizeChange">
+      @update:limit="handleSizeChange" :pagination="pagination">
       <!-- 插槽：渲染“当前状态”列 -->
       <template #status="scope">
         <el-tag :type="getStatusTag(scope.row.status)">
@@ -71,11 +71,11 @@
 
 
     <!-- 3. 分页器 -->
-    <div class="pagination-container">
+    <!-- <div class="pagination-container">
       <el-pagination v-model:current-page="currentPage" v-model:page-size="pageSize" :page-sizes="[10, 20, 50, 100]"
         layout="total, sizes, prev, pager, next, jumper" :total="filteredData.length" @size-change="handleSizeChange"
         @current-change="handleCurrentChange" />
-    </div>
+    </div> -->
 
     <!-- 4. 详情弹窗 -->
     <el-dialog v-model="detailVisible" title="仓库详情" width="500px" :close-on-click-modal="false">
@@ -141,7 +141,7 @@ import { ref, computed, reactive } from 'vue'
 import { Plus, Search, RefreshLeft } from '@element-plus/icons-vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import BaseTable from '@/components/common/BaseTable.vue'
-import type { Column } from './index.ts'
+import type { Column } from '@/types/common'
 
 // --- 1. 模拟数据 ---
 const warehouseList = ref([
@@ -197,6 +197,7 @@ const loading = ref(false)
 // --- 3. 分页状态 ---
 const currentPage = ref(1)
 const pageSize = ref(20)
+const pagination = ref(true)
 
 // --- 4. 详情弹窗状态 ---
 const detailVisible = ref(false)
@@ -351,11 +352,5 @@ const getStatusTag = (status: string) => {
   font-weight: bold;
   color: #303133;
   margin-right: 8px;
-}
-
-.pagination-container {
-  margin-top: 20px;
-  display: flex;
-  justify-content: flex-end;
 }
 </style>
