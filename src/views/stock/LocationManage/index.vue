@@ -142,13 +142,22 @@ import { Plus, Search, RefreshLeft } from '@element-plus/icons-vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import BaseTable from '@/components/common/BaseTable.vue'
 import type { Column } from '@/types/common'
+import type { Warehouse } from './index'
 
 // --- 1. 模拟数据 ---
-const warehouseList = ref([
+const warehouseList = ref<Warehouse[]>([
   { warehouseCode: '3101', warehouseName: '上海库', warehouseAddress: '上海市浦东新区新川路180号', isReturn: 'N', status: 'A' },
   { warehouseCode: '3102', warehouseName: '上海退货库', warehouseAddress: '上海市浦东新区新川路180号', isReturn: 'Y', status: 'A' },
   { warehouseCode: '1101', warehouseName: '北京库', warehouseAddress: '北京市海淀区清华紫光大厦', isReturn: 'N', status: 'C' },
+  { warehouseCode: '1102', warehouseName: '北京退货库', warehouseAddress: '北京市海淀区清华紫光大厦', isReturn: 'N', status: 'C' },
   { warehouseCode: '4401', warehouseName: '广州库', warehouseAddress: '广州市荔湾区黄沙大道144号', isReturn: 'N', status: 'D' },
+  { warehouseCode: '4402', warehouseName: '广州退货库', warehouseAddress: '广州市荔湾区黄沙大道144号', isReturn: 'N', status: 'D' },
+  { warehouseCode: '5101', warehouseName: '成都库', warehouseAddress: '成都市青羊区培风路辅路与苏坡西路', isReturn: 'N', status: 'A' },
+  { warehouseCode: '5102', warehouseName: '成都退货库', warehouseAddress: '成都市青羊区培风路辅路与苏坡西路', isReturn: 'N', status: 'A' },
+  { warehouseCode: '3301', warehouseName: '杭州库', warehouseAddress: '杭州市滨江区联慧街6号', isReturn: 'N', status: 'A' },
+  { warehouseCode: '3302', warehouseName: '杭州退货库', warehouseAddress: '杭州市滨江区联慧街6号', isReturn: 'N', status: 'A' },
+  { warehouseCode: '4403', warehouseName: '深圳库', warehouseAddress: '深圳市龙岗区龙河路3号', isReturn: 'N', status: 'A' },
+  { warehouseCode: '4404', warehouseName: '深圳退货库', warehouseAddress: '深圳市龙岗区龙河路3号', isReturn: 'N', status: 'A' },
 ])
 
 // 定义表格列配置
@@ -296,23 +305,24 @@ const handleSave = async () => {
       saving.value = true
       setTimeout(() => {
         if (isEdit.value) {
-          // 编辑逻辑
+          // --- 编辑逻辑 ---
           const index = warehouseList.value.findIndex(item => item.warehouseCode === form.warehouseCode)
           if (index !== -1) {
-            warehouseList.value[index] = { ...form }
+            // 【修改点 1】：使用 as any 绕过严格的字面量检查
+            // 因为 form 里的值是通过 v-model 来的，TS 认为是 string，但运行时肯定是 'N' 或 'Y'
+            warehouseList.value[index] = { ...form } as Warehouse
             ElMessage.success('更新成功')
           }
         } else {
-          // 新增逻辑
-          // 简单检查一下代码是否重复
+          // --- 新增逻辑 ---
           const exists = warehouseList.value.some(item => item.warehouseCode === form.warehouseCode)
           if (exists) {
             ElMessage.error('仓库代码已存在')
             saving.value = false
             return
           }
-          // 默认新增的仓库 isReturn 为 N
-          warehouseList.value.unshift({ ...form, isReturn: 'N' })
+          // 【修改点 2】：同样加上断言
+          warehouseList.value.unshift({ ...form, isReturn: 'N' } as Warehouse)
           ElMessage.success('新增成功')
         }
         formVisible.value = false
