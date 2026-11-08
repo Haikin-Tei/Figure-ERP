@@ -1,0 +1,115 @@
+server:
+  port: 8080
+  servlet:
+    encoding:
+      charset: UTF-8
+      force: true
+
+spring:
+  application:
+    name: figure-erp-server
+  profiles:
+    active: dev
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+    default-property-inclusion: non_null
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 20MB
+
+# MyBatis-Plus 全局配置
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: com.figureerp.module.**.entity
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    banner: false
+    db-config:
+      id-type: auto
+      # 逻辑删除统一约定：deleted = 1 表示已删除
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+# 接口文档：http://localhost:8080/swagger-ui.html
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+
+# 自定义配置
+app:
+  cors:
+    # 允许跨域的前端地址，多个用英文逗号分隔
+    allowed-origins: http://localhost:5173,http://127.0.0.1:5173
+  version: @project.version@
+  jwt:
+    # 生产环境务必用环境变量覆盖：export JWT_SECRET=...
+    secret: ${JWT_SECRET:figure-erp-default-jwt-secret-please-change-in-prod-2026}
+    # 令牌有效期（秒），默认 8 小时
+    expire-seconds: 28800
+    issuer: figure-erp
+  init-admin:
+    # 用户表为空时自动创建管理员，上线后可关闭
+    enabled: true
+    username: admin
+    password: ${ADMIN_INIT_PASSWORD:admin123}
+    real-name: 系统管理员
+  init-logistics:
+    # 物流价格表为空时，按区域基准价生成全国参考价（8 家供应商 × 34 个省级行政区）
+    # 只填空表，不会覆盖已有价格，重复启动没有副作用
+    enabled: true
+    # 默认出发地：上海市浦东新区；未来开新仓时可改这里，或直接在页面上新增其他出发地
+    origin-province: 上海市
+    origin-city: 上海市
+    origin-district: 浦东新区
+  init-warehouse:
+    # 仓库表为空时写入 12 条初始仓库（原先写死在前端的数据已迁到数据库）
+    # 只填空表，不会覆盖页面上改过的数据
+    enabled: true
+  init-area:
+    # 区域表为空时写入 3 条初始区域（原先写死在区域配置页面里的数据已迁到数据库）
+    # 按仓库代码关联，找不到对应仓库的种子会被跳过；只填空表
+    enabled: true
+  init-shelf:
+    # 货架表为空时写入 3 条初始货架（原先写死在货架管理页面里的数据已迁到数据库）
+    # 按仓库代码关联，找不到对应仓库的种子会被跳过；只填空表
+    enabled: true
+  init-inbound:
+    # 入库单表为空时写入 4 条演示入库单 + 明细（2 条已入库、1 条待入库、1 条调拨）
+    # 按仓库代码 / 区域编号 / 货架编号 / 手办货号关联，找不到主数据的种子会被跳过；只填空表
+    enabled: true
+  init-acg:
+    # ACG 作品表为空时写入 14 部作品 + 每部 3 条热度快照（演示用估算值，可在页面改成真实数据）
+    # 只填空表，不会覆盖页面上改过的数据
+    enabled: true
+  init-manufacturer:
+    # 厂商目录表为空时写入 13 家知名手办 / 景品厂商（万代、BANPRESTO 眼镜厂等，演示数据）
+    # 创立时间为年份占位，可在页面上改成官方信息；只填空表，不会覆盖页面上改过的数据
+    enabled: true
+  init-message:
+    # 消息表为空时给管理员生成 8 条演示消息（审批/订单/库存/系统各 2 条，覆盖未读/已读/已处理）
+    # 只填空表；正式使用后哪怕清空也不会再自动补，需要演示数据时把 enabled 打开并清表
+    enabled: true
+  init-todo:
+    # 待办表为空时给管理员生成 6 条演示待办（含 1 条昨天未完成，用来演示「逾期」）
+    # 只填空表；正式使用后哪怕清空也不会再自动补
+    enabled: true
+  upload:
+    # 商品图片落地目录（相对于应用工作目录，即 server/），完整路径 = {user.dir}/{base-dir}/products
+    # 通过 /uploads/** 对外提供静态访问，URL 形如 /uploads/products/xxx.jpg
+    base-dir: uploads
+    # 单张图片上限（前端 el-upload 也会做同样限制）
+    max-size-mb: 5
+    # 允许的类型（按 content-type 前缀 + 扩展名双重校验）
+    allowed-content-types: image/jpeg,image/png,image/gif,image/webp
+
+logging:
+  level:
+    com.figureerp: debug
