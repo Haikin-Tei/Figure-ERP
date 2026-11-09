@@ -103,7 +103,8 @@ CREATE TABLE IF NOT EXISTS `figure_product`
     `id`              bigint        NOT NULL AUTO_INCREMENT COMMENT '主键',
     `name`            varchar(200)  NOT NULL COMMENT '商品名称（手办全称）',
     `code`            varchar(50)            DEFAULT NULL COMMENT '货号 / SKU，可空，填写后不可与其他商品重复',
-    `brand`           varchar(100)           DEFAULT NULL COMMENT '品牌，如 Good Smile Company',
+    `manufacturer_id` bigint                 DEFAULT NULL COMMENT '厂商ID（manufacturer.id），商品品牌来源',
+    `brand`           varchar(100)           DEFAULT NULL COMMENT '品牌名称快照，保存时写入厂商正式名称；老数据可能只有该列',
     `series`          varchar(100)           DEFAULT NULL COMMENT '系列，如 Nendoroid / Scale',
     `character_name`  varchar(100)           DEFAULT NULL COMMENT '角色名',
     `material`        varchar(50)            DEFAULT NULL COMMENT '材质，如 PVC/ABS',
@@ -120,6 +121,7 @@ CREATE TABLE IF NOT EXISTS `figure_product`
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_code` (`code`),
     KEY `idx_name` (`name`),
+    KEY `idx_manufacturer_id` (`manufacturer_id`),
     KEY `idx_brand_series` (`brand`, `series`),
     KEY `idx_status` (`status`)
 ) ENGINE = InnoDB
@@ -166,49 +168,8 @@ CREATE TABLE IF NOT EXISTS `warehouse`
   COLLATE = utf8mb4_general_ci COMMENT ='仓库档案';
 
 -- ------------------------------------------------------------
--- 区域档案（菜单：库存管理 → 仓库设置 → 区域配置）
--- 一条记录 = 某个仓库下的一片区域（如 A区-核心展示柜），是「仓库 → 区域 → 货架 → 库位」里的中间一层。
---
--- 为什么必须挂 warehouse_id：
---   原页面把 3 条区域写死在前端（A区/B区/C区），没有归属仓库的概念；
---   落到库里如果不挂仓库，区域就是查不到上下文的孤立数据，所以和货架一样必填。
---
--- 唯一性：area_code 只在「同一仓库 + 未删除」范围内唯一（3101 的 A 和 3301 的 A 可以并存），
---   与 shelf 一致不建 UNIQUE 索引（逻辑删除会让已删记录继续占用索引），由 AreaService 校验。
---
--- status：A 使用中 / D 停用
--- capacity：可容纳的货架数（即原页面「容量 / 格子数」字段）
--- 初始 3 条数据由后端 AreaDataInitializer 在表为空时写入，之后页面上的增删改都直接写库。
--- ------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS `area`
-(
-    `id`           bigint       NOT NULL AUTO_INCREMENT COMMENT '主键',
-    `area_code`    varchar(50)  NOT NULL COMMENT '区域编号，如 A，同一仓库未删除记录中唯一',
-    `area_name`    varchar(100) NOT NULL COMMENT '区域名称，如 A区-核心展示柜',
-    `warehouse_id` bigint       NOT NULL COMMENT '所属仓库，warehouse.id',
-    `location`     varchar(100)          DEFAULT NULL COMMENT '物理位置，如 一层靠窗',
-    `capacity`     int          NOT NULL DEFAULT 0 COMMENT '可容纳货架数（原页面「容量/格子数」）',
-    `status`       char(1)      NOT NULL DEFAULT 'A' COMMENT '状态：A使用中 D停用',
-    `remark`       varchar(255)          DEFAULT NULL COMMENT '备注',
-    `sort_no`      int          NOT NULL DEFAULT 0 COMMENT '排序号，数值越小越靠前',
-    `create_time`  datetime              DEFAULT NULL COMMENT '创建时间',
-    `update_time`  datetime              DEFAULT NULL COMMENT '更新时间',
-    `deleted`      tinyint      NOT NULL DEFAULT 0 COMMENT '逻辑删除：0未删除 1已删除',
-    PRIMARY KEY (`id`),
-    KEY `idx_area_code` (`area_code`),
-    KEY `idx_warehouse_id` (`warehouse_id`),
-    KEY `idx_status` (`status`)
-) ENGINE = InnoDB
-  DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_general_ci COMMENT ='区域档案';
-
--- ------------------------------------------------------------
 -- 货架档案（菜单：库存管理 → 仓库设置 → 货架管理）
--- 一条记录 = 某个仓库下的一个货架，是「仓库 → 区域 → 货架 → 库位」层级里的中间一层。
---
--- area_id 为什么可空：
---   货架先于区域落库，已有 3 条货架数据没有区域；给可空列后老数据不用洗，
---   新货架可以在页面上选「所属区域」。填写时必须与 warehouse_id 属于同一仓库，由 ShelfService 校验。
+-- 一条记录 = 某个仓库下的一个货架，是「仓库 → 货架 → 库位」层级里的中间一层。
 --
 -- 唯一性：shelf_code 只在「同一仓库 + 未删除」范围内唯一（3101 的 01-1 和 3301 的 01-1 可以并存），
 --   所以不建 UNIQUE 索引（逻辑删除会让已删记录继续占用索引），由 ShelfService 校验。
@@ -221,7 +182,6 @@ CREATE TABLE IF NOT EXISTS `shelf`
     `id`           bigint       NOT NULL AUTO_INCREMENT COMMENT '主键',
     `shelf_code`   varchar(50)  NOT NULL COMMENT '货架编号，如 01-1，同一仓库未删除记录中唯一',
     `warehouse_id` bigint       NOT NULL COMMENT '所属仓库，warehouse.id',
-    `area_id`      bigint                DEFAULT NULL COMMENT '所属区域，area.id，可空；填写时必须与 warehouse_id 同仓库',
     `location`     varchar(100)          DEFAULT NULL COMMENT '库位信息，如 01区-1层',
     `status`       char(1)      NOT NULL DEFAULT 'A' COMMENT '状态：A正常 B维护中 D停用',
     `remark`       varchar(255)          DEFAULT NULL COMMENT '状态描述 / 备注',
@@ -232,18 +192,10 @@ CREATE TABLE IF NOT EXISTS `shelf`
     PRIMARY KEY (`id`),
     KEY `idx_shelf_code` (`shelf_code`),
     KEY `idx_warehouse_id` (`warehouse_id`),
-    KEY `idx_area_id` (`area_id`),
     KEY `idx_status` (`status`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_general_ci COMMENT ='货架档案';
-
--- 升级提示（已经建过 shelf 表的老库）：本脚本用的是 CREATE TABLE IF NOT EXISTS，
--- 表已存在时不会自动补列，需要手动执行一次下面这条（新库可忽略）：
---   ALTER TABLE `shelf`
---       ADD COLUMN `area_id` bigint DEFAULT NULL
---           COMMENT '所属区域，area.id，可空；填写时必须与 warehouse_id 同仓库' AFTER `warehouse_id`,
---       ADD KEY `idx_area_id` (`area_id`);
 
 -- ------------------------------------------------------------
 -- 入库单（菜单：库存管理 → 入库记录）
@@ -261,7 +213,7 @@ CREATE TABLE IF NOT EXISTS `shelf`
 -- total_quantity / total_amount 是明细的合计，由后端按明细重算后写入，
 --   不接受前端传值，避免出现「列表数量和明细对不上」。
 --
--- warehouse_id 必填；area_id / shelf_id 可空，填写时必须是同仓库下的区域 / 货架。
+-- warehouse_id 必填；shelf_id 可空，填写时必须是同仓库下的货架。
 -- product_name 在明细里做了快照：手办改名或下架后，历史入库单仍显示当时的名字。
 -- 初始 4 条演示单由 InboundDataInitializer 在表为空时写入，之后页面上的增删改都直接写库。
 -- ------------------------------------------------------------
@@ -271,7 +223,6 @@ CREATE TABLE IF NOT EXISTS `inbound_order`
     `inbound_no`     varchar(50)    NOT NULL COMMENT '入库单号，如 RK202611070001，未删除记录中唯一',
     `inbound_type`   char(1)        NOT NULL DEFAULT 'P' COMMENT '入库类型：P采购 R退货 T调拨 O其他',
     `warehouse_id`   bigint         NOT NULL COMMENT '入库仓库，warehouse.id',
-    `area_id`        bigint                  DEFAULT NULL COMMENT '入库区域，area.id，可空；须与 warehouse_id 同仓库',
     `shelf_id`       bigint                  DEFAULT NULL COMMENT '入库货架，shelf.id，可空；须与 warehouse_id 同仓库',
     `supplier`       varchar(100)            DEFAULT NULL COMMENT '供应商 / 来源单位',
     `status`         char(1)        NOT NULL DEFAULT 'D' COMMENT '状态：D待入库 C已入库 X已作废',
@@ -319,9 +270,58 @@ CREATE TABLE IF NOT EXISTS `inbound_item`
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_general_ci COMMENT ='入库单明细';
 
+-- ------------------------------------------------------------
+-- 库存（菜单：库存管理 → 手办列表）
+-- 一行 = 某一款手办在某个库位（仓库 / 货架）上的在库数量。
+--
+-- 为什么按「手办 + 库位」拆行，而不是每个手办一行总量：
+--   仓库里有多个货架，只知道「这款还有 5 件」没法拣货；拆到库位后，
+--   页面既能按手办汇总（SUM），也能展开看「哪几件在哪个货架上」。
+--
+-- 数据来源：入库单「确认入库」时按明细累加（InboundService → StockService），
+--   已入库单作废时按明细回退。库存不提供手工增删改接口，避免和入库记录对不上账。
+--
+-- stock 存成本总额而不是均价：
+--   均价是「总额 / 数量」算出来的展示值，存它会在作废回退时除不干净
+--   （先按 6 件 50 元入库、再按 4 件 100 元入库，均价变 70，作废后 6 件就被算成 420 元）。
+--   成本总额只需加减，回退时按入库明细的单价冲销，账能对上。
+--
+-- 唯一性：同一手办 + 同一仓库 + 同一货架 只有一行，由 StockService 先查后插保证。
+--   不建 UNIQUE 索引：shelf_id 可空，MySQL 唯一索引对 NULL 不去重；
+--   且本表逻辑删除，已删行会继续占用索引。
+--
+-- product_name / product_code / brand 是入库时的快照：
+--   商品被下架（逻辑删除）后，库存页仍要显示「这是什么货」，此时只能靠快照字段。
+--   商品还在时，页面展示以商品档案的当前值为准（改名后自动同步）。
+--
+-- 首次启动时若表为空，StockDataInitializer 会用「已入库」的入库单补一遍，
+--   让历史单据也能在库存页看到货；之后只随确认/作废变动，重启不会重复累加。
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `stock`
+(
+    `id`                bigint         NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `product_id`        bigint         NOT NULL COMMENT '手办商品，figure_product.id',
+    `product_name`      varchar(200)   NOT NULL COMMENT '手办名称快照',
+    `product_code`      varchar(50)             DEFAULT NULL COMMENT '货号快照',
+    `brand`             varchar(100)            DEFAULT NULL COMMENT '品牌快照，商品下架后仍能显示品牌',
+    `warehouse_id`      bigint         NOT NULL COMMENT '所在仓库，warehouse.id',
+    `shelf_id`          bigint                  DEFAULT NULL COMMENT '所在货架，shelf.id，可空',
+    `quantity`          int            NOT NULL DEFAULT 0 COMMENT '在库件数，确认入库累加、作废回退',
+    `total_cost`        decimal(14, 2) NOT NULL DEFAULT 0.00 COMMENT '库存成本总额 = Σ 入库数量 × 单价；均价由 总额/数量 算出',
+    `last_inbound_time` datetime                DEFAULT NULL COMMENT '最近一次入库时间',
+    `create_time`       datetime                DEFAULT NULL COMMENT '创建时间',
+    `update_time`       datetime                DEFAULT NULL COMMENT '更新时间',
+    `deleted`           tinyint        NOT NULL DEFAULT 0 COMMENT '逻辑删除：0未删除 1已删除',
+    PRIMARY KEY (`id`),
+    KEY `idx_product_id` (`product_id`),
+    KEY `idx_warehouse_id` (`warehouse_id`),
+    KEY `idx_shelf_id` (`shelf_id`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_general_ci COMMENT ='库存（手办 + 库位 + 数量）';
+
 -- 后续业务表规划（暂不创建，先对齐字段再落库）：
 --   location       库位（货架 → 库位）
---   stock          库存（手办 + 库位 + 数量）
 --   outbound_order 出库单 / outbound_item 出库明细
 --   order_info     订单
 --   sys_oper_log   操作日志
@@ -499,3 +499,116 @@ CREATE TABLE IF NOT EXISTS `manufacturer`
   COLLATE = utf8mb4_general_ci COMMENT ='厂商目录（手办 / 景品公司）';
 
 -- 初始演示厂商由后端 ManufacturerDataInitializer 在表为空时写入。
+
+-- ------------------------------------------------------------
+-- 员工考勤记录（页面：员工权限管理 → 员工考勤记录）
+-- 一行 = 一名员工某一天的考勤。
+--
+-- 录入方式：手动录入（页面上不做实时打卡按钮），
+--   check_in_time / check_out_time 就是填报的上班 / 下班时刻，判定规则见下。
+--
+-- 一人一天只有一行。为什么不建 UNIQUE(user_id, attend_date)：
+--   本表是逻辑删除，唯一索引对已删除的行照样生效，删掉一条后同一天就再也录不进去
+--   （同 warehouse / acg_work / manufacturer 的处理），唯一性由 AttendanceService 先查后插保证。
+--
+-- 状态取值（char(1)）：
+--   上班 check_in_status ：N 正常 / L 迟到（晚于 09:00）
+--   下班 check_out_status：N 正常 / E 早退（早于 18:00）/ M 未打卡（没填下班时间）/ X 免打卡（销售岗）
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `attendance_record`
+(
+    `id`                bigint      NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `user_id`           bigint      NOT NULL COMMENT '员工 sys_user.id',
+    `user_name`         varchar(50) NOT NULL COMMENT '员工姓名快照，账号删除后仍能显示',
+    `role`              varchar(20) NOT NULL COMMENT '员工角色编码快照，用于判断销售岗免下班卡',
+    `attend_date`       date        NOT NULL COMMENT '考勤日期',
+    `check_in_time`     datetime    NOT NULL COMMENT '上班时间（手动填报）',
+    `check_out_time`    datetime             DEFAULT NULL COMMENT '下班时间，销售岗为空',
+    `check_in_status`   char(1)     NOT NULL DEFAULT 'N' COMMENT '上班状态：N正常 L迟到',
+    `check_out_status`  char(1)     NOT NULL DEFAULT 'N' COMMENT '下班状态：N正常 E早退 M未打卡 X免打卡',
+    `work_minutes`      int                  DEFAULT NULL COMMENT '当日工时（分钟），下班时间为空时为空',
+    `remark`            varchar(255)         DEFAULT NULL COMMENT '备注，如「外勤」「忘记打卡后补录」',
+    `create_time`       datetime             DEFAULT NULL COMMENT '创建时间',
+    `update_time`       datetime             DEFAULT NULL COMMENT '更新时间',
+    `deleted`           tinyint     NOT NULL DEFAULT 0 COMMENT '逻辑删除：0未删除 1已删除',
+    PRIMARY KEY (`id`),
+    KEY `idx_user_date` (`user_id`, `attend_date`),
+    KEY `idx_attend_date` (`attend_date`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_general_ci COMMENT ='员工考勤记录';
+
+-- ------------------------------------------------------------
+-- 员工请假申请（页面：员工权限管理 → 员工请假申请）
+-- 一行 = 一张请假单。
+--
+-- 状态流转：P 待审批 →（主管审批）→ A 已通过 / R 已驳回；P 状态下本人可撤销 → C 已撤销。
+-- 只有 P 状态能改、能删、能撤销；已通过 / 已驳回 / 已撤销都是终态。
+--
+-- 审批权限：主管级及以上（UserRole.level >= 2），且审批人不能是自己提交的单据，
+--   避免自批自过；权限校验在 LeaveService 里做。
+--
+-- 天数 duration_days 由后端按起止时间算，不信任前端传值：
+--   跨自然日 → 含首尾的天数；同一天 → 时长 > 4 小时记 1 天，否则 0.5 天。
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `leave_apply`
+(
+    `id`             bigint        NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `apply_no`       varchar(30)   NOT NULL COMMENT '请假单号，LV + yyyyMMdd + 4 位序号，未删除记录内唯一',
+    `user_id`        bigint        NOT NULL COMMENT '申请人 sys_user.id',
+    `user_name`      varchar(50)   NOT NULL COMMENT '申请人姓名快照',
+    `role`           varchar(20)   NOT NULL COMMENT '申请人角色编码快照，用于审批时的层级判断与展示',
+    `leave_type`     char(1)       NOT NULL COMMENT '请假类型：A事假 B病假 C年假 D调休 E婚假 F产假 G其他',
+    `start_time`     datetime      NOT NULL COMMENT '请假开始时间',
+    `end_time`       datetime      NOT NULL COMMENT '请假结束时间',
+    `duration_days`  decimal(5, 1) NOT NULL COMMENT '请假天数，后端按起止时间计算',
+    `reason`         varchar(500)  NOT NULL COMMENT '请假事由',
+    `status`         char(1)       NOT NULL DEFAULT 'P' COMMENT '状态：P待审批 A已通过 R已驳回 C已撤销',
+    `approver_id`    bigint                 DEFAULT NULL COMMENT '审批人 sys_user.id',
+    `approver_name`  varchar(50)            DEFAULT NULL COMMENT '审批人姓名快照',
+    `approve_time`   datetime               DEFAULT NULL COMMENT '审批时间',
+    `approve_remark` varchar(255)           DEFAULT NULL COMMENT '审批意见 / 驳回原因',
+    `create_time`    datetime               DEFAULT NULL COMMENT '创建时间',
+    `update_time`    datetime               DEFAULT NULL COMMENT '更新时间',
+    `deleted`        tinyint       NOT NULL DEFAULT 0 COMMENT '逻辑删除：0未删除 1已删除',
+    PRIMARY KEY (`id`),
+    KEY `idx_user_time` (`user_id`, `start_time`),
+    KEY `idx_status` (`status`),
+    KEY `idx_apply_no` (`apply_no`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_general_ci COMMENT ='员工请假申请';
+
+-- ------------------------------------------------------------
+-- 员工加班申请（页面：员工权限管理 → 员工加班申请）
+-- 结构、状态流转、审批权限与 leave_apply 完全一致，差别只在「类型 + 时长单位」：
+--   加班类型 W 工作日 / O 休息日 / H 节假日；时长按小时（duration_hours，保留 1 位小数）。
+-- 单号前缀 OT + yyyyMMdd + 4 位序号。
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `overtime_apply`
+(
+    `id`             bigint        NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `apply_no`       varchar(30)   NOT NULL COMMENT '加班单号，OT + yyyyMMdd + 4 位序号，未删除记录内唯一',
+    `user_id`        bigint        NOT NULL COMMENT '申请人 sys_user.id',
+    `user_name`      varchar(50)   NOT NULL COMMENT '申请人姓名快照',
+    `role`           varchar(20)   NOT NULL COMMENT '申请人角色编码快照',
+    `overtime_type`  char(1)       NOT NULL COMMENT '加班类型：W工作日 O休息日 H节假日',
+    `start_time`     datetime      NOT NULL COMMENT '加班开始时间',
+    `end_time`       datetime      NOT NULL COMMENT '加班结束时间',
+    `duration_hours` decimal(5, 1) NOT NULL COMMENT '加班时长（小时），后端按起止时间计算',
+    `reason`         varchar(500)  NOT NULL COMMENT '加班事由',
+    `status`         char(1)       NOT NULL DEFAULT 'P' COMMENT '状态：P待审批 A已通过 R已驳回 C已撤销',
+    `approver_id`    bigint                 DEFAULT NULL COMMENT '审批人 sys_user.id',
+    `approver_name`  varchar(50)            DEFAULT NULL COMMENT '审批人姓名快照',
+    `approve_time`   datetime               DEFAULT NULL COMMENT '审批时间',
+    `approve_remark` varchar(255)           DEFAULT NULL COMMENT '审批意见 / 驳回原因',
+    `create_time`    datetime               DEFAULT NULL COMMENT '创建时间',
+    `update_time`    datetime               DEFAULT NULL COMMENT '更新时间',
+    `deleted`        tinyint       NOT NULL DEFAULT 0 COMMENT '逻辑删除：0未删除 1已删除',
+    PRIMARY KEY (`id`),
+    KEY `idx_user_time` (`user_id`, `start_time`),
+    KEY `idx_status` (`status`),
+    KEY `idx_apply_no` (`apply_no`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_general_ci COMMENT ='员工加班申请';

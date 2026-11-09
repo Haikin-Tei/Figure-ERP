@@ -1,8 +1,8 @@
 # 接口契约（API Contract）
 
 > 适用代码：`server/`（Spring Boot 4.1.2 + MyBatis-Plus）
-> 文档版本：**v2.1**
-> 最后更新：2026-11-08
+> 文档版本：**v2.5**
+> 最后更新：2026-11-09
 > 在线调试：`http://localhost:8080/swagger-ui.html`（字段中文说明与本文一致，本文额外记录了权限、错误码与业务规则）
 
 本文档是前后端之间的**唯一约定来源**。前端按本文对接，后端按本文实现；两者不一致时，以本文为准并立即修正代码或文档。
@@ -126,7 +126,7 @@
 | 层级 | level | 包含角色 | 能做什么 |
 |---|:--:|---|---|
 | 管理级 | 3 | `ADMIN` 管理员、`GM` 总经理 | 员工账号增删改 + 全部业务 |
-| 主管级 | 2 | `FINANCE_MANAGER` 财务主管、`SALES_MANAGER` 销售主管、`LOGISTICS_MANAGER` 物流主管、`HR_MANAGER` 人事主管（旧版 `MANAGER` 同层） | 维护业务数据：商品、仓库、区域、货架、入库单、物流价格、ACG 作品、发消息 |
+| 主管级 | 2 | `FINANCE_MANAGER` 财务主管、`SALES_MANAGER` 销售主管、`LOGISTICS_MANAGER` 物流主管、`HR_MANAGER` 人事主管（旧版 `MANAGER` 同层） | 维护业务数据：商品、仓库、货架、入库单、物流价格、ACG 作品、发消息 |
 | 执行级 | 1 | 对应的 `*_STAFF` 专员（旧版 `STAFF` 同层） | 只读业务数据 |
 
 | 能力 | 管理级 | 主管级 | 执行级 |
@@ -144,8 +144,6 @@
 | 仓库增删改 / 改状态 | ✓ | ✓ | ✗ |
 | 货架查询、详情 | ✓ | ✓ | ✓ |
 | 货架增删改 / 改状态 | ✓ | ✓ | ✗ |
-| 区域查询、详情 | ✓ | ✓ | ✓ |
-| 区域增删改 / 改状态 | ✓ | ✓ | ✗ |
 | 入库记录查询 / 详情 / 统计 / 字典 | ✓ | ✓ | ✓ |
 | 入库单增删改 / 确认入库 / 作废 | ✓ | ✓ | ✗ |
 | ACG 作品查询、详情、趋势、下拉选项、选品分析 | ✓ | ✓ | ✓ |
@@ -166,7 +164,7 @@
 
 ## 2. 接口总览
 
-共 **95** 个接口。「权限」列中「登录用户」= 任意已登录账号。
+共 **117** 个接口。「权限」列中「登录用户」= 任意已登录账号。
 
 | ID | 模块 | 方法 | 路径 | 名称 | 权限 | 入参 | 出参 |
 |---|---|---|---|---|---|---|---|
@@ -183,6 +181,31 @@
 | USER-05 | 员工 | DELETE | `/api/system/users/{id}` | 删除员工 | 管理级 | `id` | — |
 | USER-06 | 员工 | PUT | `/api/system/users/{id}/password` | 重置密码 | 管理级 | `id` + `PasswordResetRequest` | — |
 | USER-07 | 员工 | PUT | `/api/system/users/{id}/status` | 启用 / 停用员工 | 管理级 | `id` + `status` | — |
+| ATT-01 | 考勤 | GET | `/api/attendance/page` | 分页查询考勤 | 登录用户 | `AttendanceQuery` | `PageResult<AttendanceVO>` |
+| ATT-02 | 考勤 | GET | `/api/attendance/{id}` | 考勤详情 | 登录用户 | `id` | `AttendanceVO` |
+| ATT-03 | 考勤 | GET | `/api/attendance/summary` | 考勤统计 | 登录用户 | — | `AttendanceSummaryVO` |
+| ATT-04 | 考勤 | GET | `/api/attendance/dicts` | 考勤字典 | 登录用户 | — | `Map` |
+| ATT-05 | 考勤 | POST | `/api/attendance` | 新增考勤 | 本人或主管 / 人事 | `AttendanceSaveRequest` | `Long` |
+| ATT-06 | 考勤 | PUT | `/api/attendance/{id}` | 编辑考勤 | 本人或主管 / 人事 | `id` + `AttendanceSaveRequest` | — |
+| ATT-07 | 考勤 | DELETE | `/api/attendance/{id}` | 删除考勤 | 本人或主管 / 人事 | `id` | — |
+| LV-01 | 请假 | GET | `/api/leave/page` | 分页查询请假单 | 登录用户 | `LeaveQuery` | `PageResult<LeaveVO>` |
+| LV-02 | 请假 | GET | `/api/leave/{id}` | 请假单详情 | 登录用户 | `id` | `LeaveVO` |
+| LV-03 | 请假 | GET | `/api/leave/summary` | 请假统计 | 登录用户 | — | `LeaveSummaryVO` |
+| LV-04 | 请假 | GET | `/api/leave/dicts` | 请假字典 | 登录用户 | — | `Map` |
+| LV-05 | 请假 | POST | `/api/leave` | 提交请假申请 | 本人或主管 / 人事 | `LeaveSaveRequest` | `Long` |
+| LV-06 | 请假 | PUT | `/api/leave/{id}` | 编辑请假申请 | 本人或主管 / 人事，仅待审批 | `id` + `LeaveSaveRequest` | — |
+| LV-07 | 请假 | PUT | `/api/leave/{id}/cancel` | 撤销请假申请 | 仅本人 | `id` | — |
+| LV-08 | 请假 | PUT | `/api/leave/{id}/approve` | 审批请假申请 | 主管级及以上 | `id` + `ApproveRequest` | — |
+| LV-09 | 请假 | DELETE | `/api/leave/{id}` | 删除请假申请 | 本人或主管 / 人事，仅待审批 | `id` | — |
+| OT-01 | 加班 | GET | `/api/overtime/page` | 分页查询加班单 | 登录用户 | `OvertimeQuery` | `PageResult<OvertimeVO>` |
+| OT-02 | 加班 | GET | `/api/overtime/{id}` | 加班单详情 | 登录用户 | `id` | `OvertimeVO` |
+| OT-03 | 加班 | GET | `/api/overtime/summary` | 加班统计 | 登录用户 | — | `OvertimeSummaryVO` |
+| OT-04 | 加班 | GET | `/api/overtime/dicts` | 加班字典 | 登录用户 | — | `Map` |
+| OT-05 | 加班 | POST | `/api/overtime` | 提交加班申请 | 本人或主管 / 人事 | `OvertimeSaveRequest` | `Long` |
+| OT-06 | 加班 | PUT | `/api/overtime/{id}` | 编辑加班申请 | 本人或主管 / 人事，仅待审批 | `id` + `OvertimeSaveRequest` | — |
+| OT-07 | 加班 | PUT | `/api/overtime/{id}/cancel` | 撤销加班申请 | 仅本人 | `id` | — |
+| OT-08 | 加班 | PUT | `/api/overtime/{id}/approve` | 审批加班申请 | 主管级及以上 | `id` + `ApproveRequest` | — |
+| OT-09 | 加班 | DELETE | `/api/overtime/{id}` | 删除加班申请 | 本人或主管 / 人事，仅待审批 | `id` | — |
 | LOG-01 | 物流 | GET | `/api/logistics/prices` | 分页查询物流价格 | 登录用户 | `LogisticsPriceQuery` | `PageResult<LogisticsPriceVO>` |
 | LOG-02 | 物流 | GET | `/api/logistics/prices/{id}` | 价格详情 | 登录用户 | `id` | `LogisticsPriceVO` |
 | LOG-03 | 物流 | POST | `/api/logistics/prices` | 新增价格 | 主管级及以上 | `LogisticsPriceSaveRequest` | `Long` |
@@ -211,12 +234,6 @@
 | SHELF-04 | 货架 | PUT | `/api/shelf/{id}` | 编辑货架 | 主管级及以上 | `id` + `ShelfSaveRequest` | — |
 | SHELF-05 | 货架 | DELETE | `/api/shelf/{id}` | 删除货架 | 主管级及以上 | `id` | — |
 | SHELF-06 | 货架 | PUT | `/api/shelf/{id}/status` | 修改货架状态 | 主管级及以上 | `id` + `status` | — |
-| AREA-01 | 区域 | GET | `/api/area/page` | 分页查询区域 | 登录用户 | `AreaQuery` | `PageResult<AreaVO>` |
-| AREA-02 | 区域 | GET | `/api/area/{id}` | 区域详情 | 登录用户 | `id` | `AreaVO` |
-| AREA-03 | 区域 | POST | `/api/area` | 新增区域 | 主管级及以上 | `AreaSaveRequest` | `Long` |
-| AREA-04 | 区域 | PUT | `/api/area/{id}` | 编辑区域 | 主管级及以上 | `id` + `AreaSaveRequest` | — |
-| AREA-05 | 区域 | DELETE | `/api/area/{id}` | 删除区域 | 主管级及以上 | `id` | — |
-| AREA-06 | 区域 | PUT | `/api/area/{id}/status` | 修改区域状态 | 主管级及以上 | `id` + `status` | — |
 | INB-01 | 入库 | GET | `/api/inbound/page` | 分页查询入库单 | 登录用户 | `InboundQuery` | `PageResult<InboundOrderVO>` |
 | INB-02 | 入库 | GET | `/api/inbound/{id}` | 入库单详情（含明细） | 登录用户 | `id` | `InboundOrderVO` |
 | INB-03 | 入库 | GET | `/api/inbound/summary` | 入库记录统计 | 登录用户 | — | `InboundSummaryVO` |
@@ -226,6 +243,9 @@
 | INB-07 | 入库 | DELETE | `/api/inbound/{id}` | 删除入库单 | 主管级及以上 | `id` | — |
 | INB-08 | 入库 | PUT | `/api/inbound/{id}/confirm` | 确认入库 | 主管级及以上 | `id` | — |
 | INB-09 | 入库 | PUT | `/api/inbound/{id}/cancel` | 作废入库单 | 主管级及以上 | `id` | — |
+| STK-01 | 库存 | GET | `/api/stock/page` | 分页查询库存（按手办汇总） | 登录用户 | `StockQuery` | `PageResult<StockVO>` |
+| STK-02 | 库存 | GET | `/api/stock/summary` | 库存统计 | 登录用户 | — | `StockSummaryVO` |
+| STK-03 | 库存 | GET | `/api/stock/{productId}/locations` | 手办的库位明细 | 登录用户 | `productId` | `StockLocationVO[]` |
 | ACG-01 | ACG | GET | `/api/acg/page` | 分页查询作品 | 登录用户 | `AcgWorkQuery` | `PageResult<AcgWorkVO>` |
 | ACG-02 | ACG | GET | `/api/acg/{id}` | 作品详情 | 登录用户 | `id` | `AcgWorkVO` |
 | ACG-03 | ACG | POST | `/api/acg` | 新增作品 | 主管级及以上 | `AcgWorkSaveRequest` | `Long` |
@@ -246,7 +266,7 @@
 | MFG-06 | 厂商 | PUT | `/api/manufacturer/{id}/status` | 启用 / 停用厂商 | 主管级及以上 | `id` + `status` | — |
 | MFG-07 | 厂商 | GET | `/api/manufacturer/summary` | 厂商目录统计 | 登录用户 | — | `ManufacturerSummaryVO` |
 | MFG-08 | 厂商 | GET | `/api/manufacturer/countries` | 国家地区筛选项 | 登录用户 | — | `String[]` |
-| MFG-09 | 厂商 | GET | `/api/manufacturer/options` | 厂商下拉选项 | 登录用户 | `keyword`（可选） | `ManufacturerOptionVO[]` |
+| MFG-09 | 厂商 | GET | `/api/manufacturer/options` | 厂商下拉选项 | 登录用户 | `keyword`、`includeDisabled`（可选） | `ManufacturerOptionVO[]` |
 | MFG-10 | 厂商 | POST | `/api/manufacturer/upload` | 上传厂商 Logo | 登录用户 | `file`(Multipart) | `String`(URL) |
 | MSG-01 | 消息 | GET | `/api/message/page` | 分页查询我的消息 | 登录用户 | `MessageQuery` | `PageResult<MessageVO>` |
 | MSG-02 | 消息 | GET | `/api/message/summary` | 未读统计 | 登录用户 | — | `MessageSummaryVO` |
@@ -367,7 +387,9 @@
 | id | Long | 商品 ID |
 | name | String | 商品名称（手办全称） |
 | code | String | 货号 / SKU，未填为空（不出现在 JSON 中） |
-| brand | String | 品牌 |
+| manufacturerId | Long | 厂商 ID（`manufacturer.id`）；未关联厂商时为空（不出现在 JSON 中） |
+| brand | String | 品牌 / 厂商名称；已关联厂商时取厂商目录的**当前**名称 |
+| manufacturerLogo | String | 厂商 Logo；已关联且厂商有 Logo 时返回，用于列表展示 |
 | series | String | 系列 |
 | characterName | String | 角色名 |
 | material | String | 材质，如 PVC/ABS |
@@ -383,6 +405,10 @@
 | updateTime | LocalDateTime | 更新时间 |
 
 > 字段到 VO 的转换只有一个出口 `FigureProductConverter.toVO`；图片在库中以逗号拼接存储，出参时拆回列表并过滤空串。
+>
+> **品牌与厂商的关系**：`figure_product.manufacturer_id` 是品牌来源（来自「目录维护 → 厂商目录维护」），`brand` 是保存时写入的厂商名称快照。
+> 查询 / 详情时若 `manufacturerId` 能匹配到厂商，会用厂商目录里的**最新名称**覆盖 `brand`，因此厂商改名后商品列表自动跟随；
+> 厂商被停用不影响展示（仍按 id 解析名称），只有逻辑删除才会退回快照文本。
 
 ### 3.7 `AcgWorkVO`（ACG 作品）
 
@@ -649,7 +675,7 @@ JWT 无状态，服务端不维护会话，**前端删除本地令牌即可**；
 
 ---
 
-## 6. 员工管理接口
+## 6. 员工管理接口（账号 / 考勤 / 请假 / 加班）
 
 ### USER-01 分页查询员工
 
@@ -863,6 +889,338 @@ JWT 无状态，服务端不维护会话，**前端删除本地令牌即可**；
 | 1000 | 状态值只能是 0 或 1 | status 非 0/1 |
 | 1000 | 不能停用自己的账号 | 停用自己 |
 | 1000 | 系统至少需要保留一个启用状态的管理员 | 停用最后一个启用管理员 |
+
+### ATT-01 分页查询考勤
+
+`GET /api/attendance/page` · 登录用户（数据范围见下） · `AttendanceController#page`
+
+**入参（Query，`AttendanceQuery`）**
+
+| 字段 | 类型 | 必填 | 默认 | 约束 | 说明 |
+|---|---|---|---|---|---|
+| page | long | 否 | 1 | ≥1 | 页码 |
+| size | long | 否 | 10 | 1~500 | 每页条数 |
+| keyword | String | 否 | — | — | 模糊匹配**员工姓名或登录账号** |
+| userId | Long | 否 | — | — | 按员工精确筛选（仅主管 / 人事生效） |
+| checkInStatus | String | 否 | — | N/L | 上班状态 |
+| checkOutStatus | String | 否 | — | N/E/M/X | 下班状态 |
+| startDate | LocalDate | 否 | — | `YYYY-MM-DD` | 考勤日期起（含当天） |
+| endDate | LocalDate | 否 | — | `YYYY-MM-DD` | 考勤日期止（含当天） |
+
+排序：`attend_date` 倒序，同一天按 `id` 倒序（翻页顺序稳定）。
+
+**出参 `Result<PageResult<AttendanceVO>>`**
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | Long | 主键 |
+| userId / userName | Long / String | 员工 ID 与姓名快照 |
+| role / roleLabel | String | 角色编码与文案 |
+| attendDate | LocalDate | 考勤日期 |
+| checkInTime / checkOutTime | LocalDateTime | 上班 / 下班时间，销售岗下班为空 |
+| checkInStatus / checkInStatusText | String | 上班状态：`N` 正常 / `L` 迟到 |
+| checkOutStatus / checkOutStatusText | String | 下班状态：`N` 正常 / `E` 早退 / `M` 未打卡 / `X` 免打卡 |
+| workMinutes | Integer | 当日工时（分钟），未打下班卡时为 null |
+| workHours | BigDecimal | 工时小时数，保留 1 位小数，供前端直接展示 |
+| exemptCheckOut | Boolean | 是否销售岗免下班卡 |
+| remark | String | 备注 |
+| createTime | LocalDateTime | 创建时间 |
+
+**数据范围**
+
+- 执行级账号（`UserRole.level = 1`）**只能看自己的考勤**，传 `userId` 也不生效；
+- 主管级及以上、人事岗（`HR_MANAGER` / `HR_STAFF`）可以看全部员工的考勤并按人筛选。
+- 放行人事岗是因为人事专员虽为执行级，但考勤本来就归人事管；只放宽「看」与「录」，不放宽审批类操作。
+
+### ATT-02 考勤详情
+
+`GET /api/attendance/{id}` · 登录用户（同上数据范围） · `AttendanceController#detail`
+
+出参 `Result<AttendanceVO>`。执行级账号查别人的记录返回 `403`。
+
+### ATT-03 考勤统计
+
+`GET /api/attendance/summary` · 登录用户 · `AttendanceController#summary`
+
+出参 `Result<AttendanceSummaryVO>`，口径为**本月**（考勤日期落在当前自然月），数据范围与列表一致：
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| monthRecords | Long | 本月考勤记录数（人 × 天） |
+| lateCount | Long | 本月迟到次数 |
+| earlyCount | Long | 本月早退次数 |
+| missingCount | Long | 本月未打下班卡次数 |
+| staffCount | Long | 本月有考勤记录的员工数 |
+
+### ATT-04 考勤字典
+
+`GET /api/attendance/dicts` · 登录用户 · `AttendanceController#dicts`
+
+出参 `Result<Map>`：`checkInStatuses`（2 项）、`checkOutStatuses`（4 项），每项为 `{ code, label }`。
+
+### ATT-05 新增考勤
+
+`POST /api/attendance` · 登录用户（代录需主管 / 人事） · `AttendanceController#create`
+
+**入参（Body，`AttendanceSaveRequest`）**
+
+| 字段 | 类型 | 必填 | 约束 | 说明 |
+|---|---|---|---|---|
+| userId | Long | 否 | — | 员工 ID，留空表示当前登录用户 |
+| attendDate | LocalDate | 是 | ≤ 今天 | 考勤日期 |
+| checkInTime | LocalDateTime | 是 | 日期必须等于 attendDate | 上班时间 |
+| checkOutTime | LocalDateTime | 否 | 日期等于 attendDate 且晚于上班 | 下班时间，销售岗忽略 |
+| remark | String | 否 | ≤255 | 备注 |
+
+出参 `Result<Long>`（新记录 id）。
+
+**考勤规则（ATT-05 / ATT-06 共用）**
+
+- **一人一天一条**：同一员工同一天已有未删除记录时返回 `1002`，请直接编辑那一条；
+- **迟到**：上班时间晚于 `09:00`（见 `AttendanceRule.WORK_START`）；
+- **早退**：下班时间早于 `18:00`（见 `AttendanceRule.WORK_END`）；没填下班时间记「未打卡 `M`」；
+- **销售岗**（`SALES_MANAGER` / `SALES_STAFF`）：只录上班卡，`checkOutTime` 一律清空、状态记为「免打卡 `X`」，**前端传了也会被忽略**；
+- **状态与工时全部后端计算**，`AttendanceRule` 是唯一实现，前端传的状态字段不生效；工时 = 下班 − 上班（分钟），未打卡为 null；
+- **考勤日期不能晚于今天**，上班 / 下班时间的日期部分必须与考勤日期一致。
+
+### ATT-06 编辑考勤
+
+`PUT /api/attendance/{id}` · 本人或主管 / 人事 · `AttendanceController#update`
+
+入参同上。规则：
+
+- **不能更换员工**（`userId` 与原记录不一致返回 `1003`），需要换人请删除后重新录入；
+- 改日期时要重新校验「一人一天一条」（排除自己）；
+- 把 `checkOutTime` 传 `null` 会**真正清空**下班时间（实体字段标了 `FieldStrategy.ALWAYS` + `LambdaUpdateWrapper` 逐列 set），下班状态随之变为「未打卡」。
+
+### ATT-07 删除考勤
+
+`DELETE /api/attendance/{id}` · 本人或主管 / 人事 · `AttendanceController#delete`
+
+逻辑删除。删除后详情返回 `1001`。
+
+**错误码汇总**
+
+| code | message | 场景 |
+|---|---|---|
+| 403 | 只能查看自己的考勤记录 | 执行级查他人详情 |
+| 403 | 只能录入自己的考勤，代录请联系主管或人事 | 执行级传他人 userId |
+| 403 | 只能修改自己的考勤记录 | 执行级改他人记录 |
+| 1001 | 考勤记录不存在或已被删除 | id 无效 |
+| 1002 | {姓名} 在 {日期} 已有考勤记录，请直接编辑 | 一人一天重复录入 |
+| 1003 | 考勤日期不能晚于今天 | attendDate 是未来 |
+| 1003 | 上班时间的日期必须与考勤日期一致 | 时间与日期不匹配 |
+| 1003 | 下班时间的日期必须与考勤日期一致 | 同上 |
+| 1003 | 下班时间必须晚于上班时间 | 时间倒挂 |
+| 1003 | 编辑时不能更换员工，请删除后重新录入 | 编辑改 userId |
+
+### LV-01 分页查询请假单
+
+`GET /api/leave/page` · 登录用户（数据范围见下） · `LeaveController#page`
+
+**入参（Query，`LeaveQuery`）**
+
+| 字段 | 类型 | 必填 | 默认 | 约束 | 说明 |
+|---|---|---|---|---|---|
+| page / size | long | 否 | 1 / 10 | size 1~500 | 分页 |
+| keyword | String | 否 | — | — | 模糊匹配**单号 / 申请人姓名 / 请假事由** |
+| userId | Long | 否 | — | — | 按申请人筛选（仅主管 / 人事生效） |
+| leaveType | String | 否 | — | A~G | 请假类型 |
+| status | String | 否 | — | P/A/R/C | 单据状态 |
+| startDate / endDate | LocalDate | 否 | — | `YYYY-MM-DD` | 按**请假开始时间**过滤，含当天 |
+
+排序：`create_time` 倒序，同时间按 `id` 倒序。
+
+**出参 `Result<PageResult<LeaveVO>>`**
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id / applyNo | Long / String | 主键与单号（`LV` + `yyyyMMdd` + 4 位序号） |
+| userId / userName | Long / String | 申请人 ID 与姓名快照 |
+| role / roleLabel | String | 申请人角色编码与文案 |
+| leaveType / leaveTypeText | String | 请假类型与文案，见 §13.17 |
+| startTime / endTime | LocalDateTime | 请假起止时间 |
+| durationDays | BigDecimal | 请假天数（后端计算） |
+| reason | String | 请假事由 |
+| status / statusText | String | 状态与文案，见 §13.19 |
+| approverName | String | 审批人姓名，未审批为空 |
+| approveTime | LocalDateTime | 审批时间 |
+| approveRemark | String | 审批意见 / 驳回原因 |
+| canApprove | Boolean | 当前用户可否审批（待审批 + 主管级及以上 + 非本人） |
+| canCancel | Boolean | 当前用户可否撤销（待审批 + 本人） |
+| canEdit / canDelete | Boolean | 当前用户可否编辑 / 删除（待审批 + 本人或主管） |
+| createTime | LocalDateTime | 提交时间 |
+
+> `can*` 四个开关由后端算好返回，前端只负责显示 / 隐藏按钮，避免两边权限判断不一致导致「按钮点了 403」。
+
+**数据范围**
+
+- 执行级账号只看自己提交的单；主管级及以上、人事岗（`HR_*`）看全部并可按人筛选。
+
+### LV-02 请假单详情
+
+`GET /api/leave/{id}` · 登录用户（同上数据范围） · `LeaveController#detail`
+
+出参 `Result<LeaveVO>`，带 `can*` 按钮权限标记。
+
+### LV-03 请假统计
+
+`GET /api/leave/summary` · 登录用户 · `LeaveController#summary`
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| pendingCount | Long | 待审批单数（**全量**，不受月份限制） |
+| monthApprovedCount | Long | 本月已通过的单数 |
+| monthDays | BigDecimal | 本月已通过的天数合计 |
+| monthStaffCount | Long | 本月请假涉及的人数 |
+
+### LV-04 请假字典
+
+`GET /api/leave/dicts` · 登录用户 · `LeaveController#dicts`
+
+出参 `Result<Map>`：`leaveTypes`（7 项）、`statuses`（4 项）。
+
+### LV-05 提交请假申请
+
+`POST /api/leave` · 登录用户（代提需主管 / 人事） · `LeaveController#create`
+
+**入参（Body，`LeaveSaveRequest`）**
+
+| 字段 | 类型 | 必填 | 约束 | 说明 |
+|---|---|---|---|---|
+| userId | Long | 否 | — | 申请人，留空表示当前登录用户 |
+| leaveType | String | 是 | `A`~`G` | 请假类型 |
+| startTime | LocalDateTime | 是 | — | 开始时间 |
+| endTime | LocalDateTime | 是 | 晚于开始，时长 ≥1 小时 | 结束时间 |
+| reason | String | 是 | ≤500 | 请假事由 |
+
+出参 `Result<Long>`。单号自动生成，状态固定为 `P`（待审批）。
+
+**请假天数计算（`LeaveService.calcDays`）**
+
+- **跨自然日**：含首尾的天数（如 11-10 09:00 → 11-12 18:00 = 3 天）；
+- **同一天**：时长 > 4 小时记 1 天，否则记 0.5 天；
+- 按自然日而非「时长 ÷ 8」，跨周末 / 节假日暂不折算工作日，规则简单可解释。
+
+### LV-06 编辑请假申请
+
+`PUT /api/leave/{id}` · 本人或主管 / 人事，且**仅待审批** · `LeaveController#update`
+
+入参同 LV-05。规则：
+
+- 只有 `P` 状态可改，终态返回 `1000`；
+- 不能更换申请人（返回 `1003`）；
+- 单号、状态、审批人不受编辑影响，天数按新起止时间重算。
+
+### LV-07 撤销请假申请
+
+`PUT /api/leave/{id}/cancel` · **仅本人** · `LeaveController#cancel`
+
+`P` → `C`（已撤销）。非本人返回 `403`；非待审批返回 `1000`；并发下状态已被改动时返回 `1000`「单据状态已变更」。
+
+### LV-08 审批请假申请
+
+`PUT /api/leave/{id}/approve` · **主管级及以上** · `LeaveController#approve`
+
+**入参（Body，`ApproveRequest`，请假 / 加班共用）**
+
+| 字段 | 类型 | 必填 | 约束 | 说明 |
+|---|---|---|---|---|
+| result | String | 是 | `A` 通过 / `R` 驳回 | 审批结果 |
+| remark | String | 否 | ≤255 | 审批意见；**驳回时必填** |
+
+规则：
+
+- **不能审批自己提交的单**，返回 `403`「不能审批自己提交的请假申请，请交给其他主管」；
+- 驳回未填 `remark` 返回 `1003`；
+- 审批写入 `status` / `approver_id` / `approver_name` / `approve_time` / `approve_remark`；
+- `update` 条件带 `status = P` 并校验影响行数，两人同时审批时后提交的一方返回 `1000`「单据已被处理」。
+
+### LV-09 删除请假申请
+
+`DELETE /api/leave/{id}` · 本人或主管 / 人事，且仅待审批 · `LeaveController#delete`
+
+逻辑删除。终态单据不可删除（`1000`）。
+
+**状态流转（LV / OT 共用）**
+
+```
+P 待审批 ──审批通过──> A 已通过（终态）
+   │      └─审批驳回──> R 已驳回（终态）
+   └─本人撤销──────────> C 已撤销（终态）
+```
+
+- 只有 `P` 能编辑 / 删除 / 撤销 / 审批；
+- `A` / `R` / `C` 都是终态，需要重新走一张新单。
+
+### OT-01 分页查询加班单
+
+`GET /api/overtime/page` · 登录用户（数据范围同 LV-01） · `OvertimeController#page`
+
+入参 `OvertimeQuery`：`page` / `size` / `keyword`（单号 / 姓名 / 事由）/ `userId` / `overtimeType`（`W`/`O`/`H`）/ `status` / `startDate` / `endDate`。
+
+出参 `Result<PageResult<OvertimeVO>>`，字段与 `LeaveVO` 同构，`leaveType` / `durationDays` 换成 `overtimeType` / `overtimeTypeText` / `durationHours`。
+
+### OT-02 加班单详情
+
+`GET /api/overtime/{id}` · 登录用户 · `OvertimeController#detail`
+
+### OT-03 加班统计
+
+`GET /api/overtime/summary` · 登录用户 · `OvertimeController#summary`
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| pendingCount | Long | 待审批单数（全量） |
+| monthApprovedCount | Long | 本月已通过的单数 |
+| monthHours | BigDecimal | 本月已通过的加班时长合计（小时） |
+| monthStaffCount | Long | 本月加班涉及的人数 |
+
+### OT-04 加班字典
+
+`GET /api/overtime/dicts` · 登录用户 · `OvertimeController#dicts`
+
+出参 `Result<Map>`：`overtimeTypes`（3 项）、`statuses`（4 项）。
+
+### OT-05 提交加班申请
+
+`POST /api/overtime` · 登录用户（代提需主管 / 人事） · `OvertimeController#create`
+
+**入参（Body，`OvertimeSaveRequest`）**
+
+| 字段 | 类型 | 必填 | 约束 | 说明 |
+|---|---|---|---|---|
+| userId | Long | 否 | — | 申请人，留空表示当前登录用户 |
+| overtimeType | String | 是 | `W` / `O` / `H` | 加班类型 |
+| startTime | LocalDateTime | 是 | — | 开始时间 |
+| endTime | LocalDateTime | 是 | 晚于开始 | 结束时间 |
+| reason | String | 是 | ≤500 | 加班事由 |
+
+**加班时长规则**
+
+- 时长 = `endTime − startTime`，按小时保留 1 位小数（30 分钟 → 0.5）；
+- **允许跨天**（22:00 → 次日 02:00 = 4.0 小时）；
+- 单次最少 30 分钟、最多 24 小时，超出返回 `1003`。
+
+### OT-06 编辑加班申请
+
+`PUT /api/overtime/{id}` · 本人或主管 / 人事，且仅待审批 · `OvertimeController#update`
+
+规则同 LV-06，时长按新起止时间重算。
+
+### OT-07 撤销加班申请
+
+`PUT /api/overtime/{id}/cancel` · **仅本人** · `OvertimeController#cancel`
+
+### OT-08 审批加班申请
+
+`PUT /api/overtime/{id}/approve` · **主管级及以上** · `OvertimeController#approve`
+
+入参同 `ApproveRequest`，规则同 LV-08（不可自审、驳回必填原因、并发保护）。
+
+### OT-09 删除加班申请
+
+`DELETE /api/overtime/{id}` · 本人或主管 / 人事，且仅待审批 · `OvertimeController#delete`
 
 ---
 
@@ -1251,7 +1609,8 @@ JWT 无状态，服务端不维护会话，**前端删除本地令牌即可**；
 | size | long | 否 | 10 | 1~500 | 每页条数 |
 | name | String | 否 | — | 模糊 | 商品名称模糊匹配 |
 | code | String | 否 | — | 模糊 | 货号模糊匹配 |
-| brand | String | 否 | — | 模糊 | 品牌模糊匹配 |
+| manufacturerId | Long | 否 | — | 精确 | 厂商 ID 精确匹配（页面用下拉筛选，推荐） |
+| brand | String | 否 | — | 模糊 | 品牌名称模糊匹配（兼容未关联厂商的老数据） |
 | series | String | 否 | — | 模糊 | 系列模糊匹配 |
 | characterName | String | 否 | — | 模糊 | 角色名模糊匹配 |
 | status | Integer | 否 | — | 0/1 | 状态精确匹配 |
@@ -1270,6 +1629,7 @@ JWT 无状态，服务端不维护会话，**前端删除本地令牌即可**；
         "id": 1,
         "name": "初音未来 雪未来 1/7 手办",
         "code": "GSC-0001",
+        "manufacturerId": 5,
         "brand": "Good Smile Company",
         "series": "Scale",
         "characterName": "初音未来",
@@ -1327,7 +1687,8 @@ JWT 无状态，服务端不维护会话，**前端删除本地令牌即可**；
 |---|---|---|---|---|
 | name | String | 是 | 非空 | 商品名称（手办全称） |
 | code | String | 否 | 填写后全局唯一 | 货号 / SKU |
-| brand | String | 否 | — | 品牌 |
+| manufacturerId | Long | 否 | 必须存在 | 厂商 ID（来自「厂商目录」下拉，`GET /api/manufacturer/options`）；传了则 `brand` 自动写成厂商名称 |
+| brand | String | 否 | — | 品牌名称；**仅在未传 manufacturerId 时生效**（兼容未关联厂商的老数据） |
 | series | String | 否 | — | 系列 |
 | characterName | String | 否 | — | 角色名 |
 | material | String | 否 | — | 材质，如 PVC/ABS |
@@ -1356,6 +1717,7 @@ JWT 无状态，服务端不维护会话，**前端删除本地令牌即可**；
 | 1003 | 带盒重量必须大于 0 | 重量为 0 或负数（Service 兜底） |
 | 1003 | 商品图片需 3~4 张 | 图片数量越界（Service 兜底） |
 | 1002 | 货号已存在：{code} | 命中货号唯一约束 |
+| 1001 | 所选厂商不存在或已被删除 | `manufacturerId` 查不到对应厂商 |
 
 ### PRO-04 编辑商品
 
@@ -1380,6 +1742,7 @@ JWT 无状态，服务端不维护会话，**前端删除本地令牌即可**；
 | 1001 | 商品不存在或已被删除 | id 无效 |
 | 1003 | 入参校验失败 | 同 PRO-03 |
 | 1002 | 货号已存在：{code} | 改后与另一条记录撞货号（排除自身） |
+| 1001 | 所选厂商不存在或已被删除 | `manufacturerId` 查不到对应厂商 |
 
 ### PRO-05 删除商品
 
@@ -1467,9 +1830,13 @@ JWT 无状态，服务端不维护会话，**前端删除本地令牌即可**；
 
 ---
 
-## 9. 库存管理接口（仓库 / 区域 / 货架 / 入库记录）
+## 9. 库存管理接口（仓库 / 货架 / 入库记录 / 手办列表）
 
-本节的 WH-* 是「库存管理 → 仓库设置 → 库位管理」页面的仓库档案（`warehouse` 表），AREA-* 是同一菜单下「区域配置」页面的区域档案（`area` 表），SHELF-* 是「货架管理」页面的货架档案（`shelf` 表）。三者构成 `仓库 → 区域 → 货架 → 库位` 的层级，是后续入库、库位、库存业务的底座主数据，所以放在同一章节。
+本节的 WH-* 是「库存管理 → 仓库设置 → 库位管理」页面的仓库档案（`warehouse` 表），SHELF-* 是「货架管理」页面的货架档案（`shelf` 表）。两者构成 `仓库 → 货架 → 库位` 的层级，是后续入库、库位、库存业务的底座主数据，所以放在同一章节。
+
+> 原「区域配置」页面（`area` 表 / AREA-* 接口）已下线：区域这一层不参与业务，货架直接挂在仓库下。老库中的 `area` 表与各表的 `area_id` 列已不再被代码读写，可按需再清理。
+
+INB-* 是「入库记录」页面的入库单（`inbound_order` + `inbound_item`），STK-* 是「手办列表」页面的库存（`stock` 表）。**库存不是手工维护的数据**：入库单确认时按明细累加，已入库单作废时按明细回退，所以 STK-* 只有查询接口。
 
 **仓库（`warehouse`）**：原先 12 条仓库写死在前端，现已落库；页面的查询 / 新增 / 编辑 / 删除全部走接口，操作后列表会立即重新拉取，反映库中最新数据。
 
@@ -1617,7 +1984,6 @@ JWT 无状态，服务端不维护会话，**前端删除本地令牌即可**；
 | 403 | 没有权限删除仓库，请联系管理员或主管 | 非 主管级及以上 |
 | 1001 | 仓库不存在或已被删除 | id 无效或已删除 |
 | 1000 | 仓库「上海库」下还有 3 个货架，请先删除货架 | 该仓库仍挂着未删除的货架 |
-| 1000 | 仓库「上海库」下还有 2 个区域，请先删除区域 | 该仓库仍挂着未删除的区域 |
 
 ### WH-06 修改仓库状态
 
@@ -1645,8 +2011,6 @@ JWT 无状态，服务端不维护会话，**前端删除本地令牌即可**；
 | warehouseId | Long | 所属仓库 ID（`warehouse.id`） |
 | warehouseCode | String | 所属仓库代码，后端按 `warehouseId` 关联返回 |
 | warehouseName | String | 所属仓库名称，后端按 `warehouseId` 关联返回 |
-| areaId | Long | 所属区域 ID（`area.id`），可空（不填表示未分区） |
-| areaName | String | 所属区域名称，后端按 `areaId` 关联返回；未分区时不返回该字段 |
 | location | String | 库位信息，如 `01区-1层`，可空 |
 | status | String | `A` 正常 / `B` 维护中 / `D` 停用 |
 | statusText | String | 后端翻译好的状态文案 |
@@ -1661,10 +2025,9 @@ JWT 无状态，服务端不维护会话，**前端删除本地令牌即可**；
 
 - **货架编号唯一范围 = 同一仓库 + 未删除**：`3101 上海库` 的 `01-1` 和 `3301 杭州库` 的 `01-1` 可以并存，同一仓库内重复返回 `1002`。删除是逻辑删除，删除后同仓库下该编号可以重建。
 - **所属仓库必须存在**：`warehouseId` 必填且必须指向未删除的仓库，否则 `1001`。
-- **所属区域可空，但不能跨仓库**：`areaId` 不传表示未分区；传了就必须存在（否则 `1001`）且 `area.warehouseId` 必须等于 `warehouseId`（否则 `1003`「所属区域不属于所选仓库」）。
 - **状态取值**：`status` ∈ `A`/`B`/`D`（正常 / 维护中 / 停用）；非法值返回 `1003`。注意与仓库状态的 `C` 盘库中区分，两套状态独立。
 - **排序**：按 `sortNo` 升序、同序按 `id` 升序。初始 3 条数据由 `ShelfDataInitializer` 在表为空时按仓库代码关联写入。
-- **删除保护**：仓库下还有未删除货架或区域时，`WH-05` 返回 `1000` 拦住；区域下还有未删除货架时，`AREA-05` 返回 `1000` 拦住，避免下层数据指向不存在的上层档案。
+- **删除保护**：仓库下还有未删除货架时，`WH-05` 返回 `1000` 拦住，避免货架指向不存在的仓库。
 - **权限**：查询 / 详情——任意登录用户；新增 / 编辑 / 删除 / 改状态——仅 ADMIN 或 MANAGER。
 
 ### SHELF-01 分页查询货架
@@ -1679,7 +2042,6 @@ JWT 无状态，服务端不维护会话，**前端删除本地令牌即可**；
 | size | long | 否 | 20 | 1~500 | 每页条数 |
 | keyword | String | 否 | — | 模糊 | 同时匹配货架编号与库位信息 |
 | warehouseId | Long | 否 | — | 精确 | 所属仓库 |
-| areaId | Long | 否 | — | 精确 | 所属区域 |
 | status | String | 否 | — | 精确 | `A` / `B` / `D` |
 
 **出参**：`Result<PageResult<ShelfVO>>`，元素结构见 §9.2
@@ -1727,7 +2089,6 @@ GET /api/shelf/page?page=1&size=10&keyword=01区&warehouseId=1
 |---|---|---|---|---|
 | shelfCode | String | 是 | ≤50 | 货架编号，同一仓库内唯一 |
 | warehouseId | Long | 是 | 必须存在 | 所属仓库 |
-| areaId | Long | 否 | 必须属于同一仓库 | 所属区域，不传表示未分区 |
 | location | String | 否 | ≤100 | 库位信息 |
 | status | String | 否 | `A`/`B`/`D`，默认 `A` | 货架状态 |
 | remark | String | 否 | ≤255 | 状态描述 / 备注 |
@@ -1790,161 +2151,7 @@ GET /api/shelf/page?page=1&size=10&keyword=01区&warehouseId=1
 
 ---
 
-### 9.3 共享结构 `AreaVO`
-
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| id | Long | 主键 |
-| areaCode | String | 区域编号，如 `A`；**同一仓库内**唯一 |
-| areaName | String | 区域名称，如 `A区-核心展示柜` |
-| warehouseId | Long | 所属仓库 ID（`warehouse.id`） |
-| warehouseCode | String | 所属仓库代码，后端按 `warehouseId` 关联返回 |
-| warehouseName | String | 所属仓库名称，后端按 `warehouseId` 关联返回 |
-| location | String | 物理位置，如 `一层-主墙面`，可空 |
-| capacity | Integer | 容量：可容纳货架数（原页面「容量 / 格子数」） |
-| shelfCount | Long | 该区域下**未删除**的货架数，后端算好直接返回，页面展示成 `2 / 20 个货架` |
-| status | String | `A` 使用中 / `D` 停用 |
-| statusText | String | 后端翻译好的状态文案 |
-| remark | String | 备注，可空 |
-| sortNo | Integer | 排序号，越小越靠前 |
-| createTime | String | 创建时间（ISO-8601） |
-| updateTime | String | 更新时间（ISO-8601） |
-
-> `warehouseCode` / `warehouseName` / `shelfCount` 都是后端批量算好的，前端不需要为每一行再请求仓库或货架接口。
-
-**关键业务规则（后端强制）：**
-
-- **区域编号唯一范围 = 同一仓库 + 未删除**：`3101 上海库` 的 `A` 和 `3301 杭州库` 的 `A` 可以并存，同一仓库内重复返回 `1002`。删除是逻辑删除，删除后同仓库下该编号可以重建。
-- **所属仓库必须存在**：`warehouseId` 必填且必须指向未删除的仓库，否则 `1001`。
-- **状态取值**：`status` ∈ `A`/`D`（使用中 / 停用）；注意没有货架那样的 `B` 维护中，传 `B` 返回 `1003`。
-- **排序**：按 `sortNo` 升序、同序按 `id` 升序。初始 3 条数据由 `AreaDataInitializer` 在表为空时按仓库代码关联写入。
-- **删除与改仓库保护**：区域下还有未删除货架时，`AREA-05` 返回 `1000`；同样场景下 `AREA-04` 不许把区域改到其他仓库（否则货架的 `warehouseId` 会和区域的仓库对不上），也返回 `1000`。
-- **权限**：查询 / 详情——任意登录用户；新增 / 编辑 / 删除 / 改状态——主管级及以上（ADMIN / GM / 各部门主管）。
-
-### AREA-01 分页查询区域
-
-`GET /api/area/page` · 登录用户 · `AreaController#page`
-
-**入参（Query，`AreaQuery`）**
-
-| 字段 | 类型 | 必填 | 默认 | 约束 | 说明 |
-|---|---|---|---|---|---|
-| page | long | 否 | 1 | ≥1 | 页码 |
-| size | long | 否 | 20 | 1~500 | 每页条数 |
-| keyword | String | 否 | — | 模糊 | 同时匹配区域编号与区域名称 |
-| warehouseId | Long | 否 | — | 精确 | 所属仓库 |
-| status | String | 否 | — | 精确 | `A` / `D` |
-
-**出参**：`Result<PageResult<AreaVO>>`，元素结构见 §9.3
-
-**示例**
-
-```http
-GET /api/area/page?page=1&size=10&warehouseId=1&status=A
-```
-
-```json
-{ "code": 200, "message": "操作成功", "data": {
-  "records": [
-    { "id": 1, "areaCode": "A", "areaName": "A区-核心展示柜", "warehouseId": 1,
-      "warehouseCode": "3101", "warehouseName": "上海库", "location": "一层-主墙面",
-      "capacity": 20, "shelfCount": 2, "status": "A", "statusText": "使用中",
-      "remark": "放置热门款", "sortNo": 10,
-      "createTime": "2026-11-07T08:47:02", "updateTime": "2026-11-07T08:47:02" }
-  ],
-  "total": 2, "page": 1, "size": 10, "pages": 1
-} }
-```
-
-**错误码**：`401` 未登录
-
-### AREA-02 区域详情
-
-`GET /api/area/{id}` · 登录用户 · `AreaController#detail`
-
-**出参**：`Result<AreaVO>`，结构见 §9.3
-
-**错误码**
-
-| code | message | 场景 |
-|---|---|---|
-| 401 | 见 §1.1 | 未登录 |
-| 1001 | 区域不存在或已被删除 | id 无效或已删除 |
-
-### AREA-03 新增区域
-
-`POST /api/area` · 主管级及以上 · `AreaController#create`
-
-**入参（Body，`AreaSaveRequest`）**
-
-| 字段 | 类型 | 必填 | 约束 | 说明 |
-|---|---|---|---|---|
-| areaCode | String | 是 | ≤50 | 区域编号，同一仓库内唯一 |
-| areaName | String | 是 | ≤100 | 区域名称 |
-| warehouseId | Long | 是 | 必须存在 | 所属仓库 |
-| location | String | 否 | ≤100 | 物理位置 |
-| capacity | Integer | 否 | 0~9999，默认 0 | 容量：可容纳货架数 |
-| status | String | 否 | `A`/`D`，默认 `A` | 区域状态 |
-| remark | String | 否 | ≤255 | 备注 |
-| sortNo | Integer | 否 | — | 排序号，默认 0 |
-
-**出参**：`Result<Long>`，新区域 ID
-
-**错误码**
-
-| code | message | 场景 |
-|---|---|---|
-| 401 | 见 §1.1 | 未登录 |
-| 403 | 没有权限维护区域，请联系管理员或主管 | 执行级 |
-| 1003 | 请填写区域编号 / 请填写区域名称 / 请选择所属仓库 / 区域状态只能是 A 或 D / 容量不能小于 0 | 参数校验失败 |
-| 1001 | 所属仓库不存在或已被删除 | `warehouseId` 无效 |
-| 1002 | 该仓库下区域编号已存在：A | 同仓库编号重复 |
-
-### AREA-04 编辑区域
-
-`PUT /api/area/{id}` · 主管级及以上 · `AreaController#update`
-
-入参同 AREA-03（全量提交）。改 `warehouseId` 时会按新仓库重新校验编号唯一性；如果区域下已经有货架，改仓库会被拒绝（`1000`），需要先把货架移走。
-
-**出参**：`Result<Void>`
-
-**错误码**：同 AREA-03，另加 `1001` 区域不存在或已被删除、`1000` 该区域下还有 N 个货架，不能改到其他仓库
-
-### AREA-05 删除区域
-
-`DELETE /api/area/{id}` · 主管级及以上 · `AreaController#delete`
-
-逻辑删除：数据保留在库中，列表不再返回；删除后同仓库下该编号可以重新使用。
-
-**出参**：`Result<Void>`
-
-**错误码**
-
-| code | message | 场景 |
-|---|---|---|
-| 401 | 见 §1.1 | 未登录 |
-| 403 | 没有权限删除区域，请联系管理员或主管 | 非 主管级及以上 |
-| 1001 | 区域不存在或已被删除 | id 无效或已删除 |
-| 1000 | 区域「A区-核心展示柜」下还有 2 个货架，请先删除货架或将货架改到其他区域 | 区域内仍有未删除货架 |
-
-### AREA-06 修改区域状态
-
-`PUT /api/area/{id}/status?status=D` · 主管级及以上 · `AreaController#updateStatus`
-
-**入参**：Query `status`，取值 `A` / `D`
-
-**出参**：`Result<Void>`
-
-**错误码**
-
-| code | message | 场景 |
-|---|---|---|
-| 401 | 见 §1.1 | 未登录 |
-| 403 | 没有权限修改区域状态，请联系管理员或主管 | 非 主管级及以上 |
-| 1003 | 区域状态只能是 A 或 D | 非法状态值（含货架专用的 B） |
-| 1001 | 区域不存在或已被删除 | id 无效或已删除 |
-
-### 9.4 共享结构 `InboundOrderVO` / `InboundItemVO`
+### 9.3 共享结构 `InboundOrderVO` / `InboundItemVO`
 
 `InboundOrderVO`（列表 / 详情共用，列表不返回 `items`）
 
@@ -1957,8 +2164,6 @@ GET /api/area/page?page=1&size=10&warehouseId=1&status=A
 | warehouseId | Long | 入库仓库 ID（`warehouse.id`） |
 | warehouseCode | String | 仓库代码，后端关联返回 |
 | warehouseName | String | 仓库名称，后端关联返回 |
-| areaId | Long | 入库区域 ID，可空 |
-| areaName | String | 区域名称，后端关联返回；`areaId` 为空时不返回 |
 | shelfId | Long | 入库货架 ID，可空 |
 | shelfCode | String | 货架编号，后端关联返回；`shelfId` 为空时不返回 |
 | supplier | String | 供应商 / 来源单位，可空 |
@@ -2000,14 +2205,14 @@ GET /api/area/page?page=1&size=10&warehouseId=1&status=A
 **关键业务规则（后端强制）：**
 
 - **单号**：`inboundNo` 留空时后端按 `RK + yyyyMMdd + 4 位序号` 自动生成（如 `RK202611070001`），当天从 `0001` 递增、撞号自动往后找；手填则在未删除记录内唯一，重复返回 `1002`。
-- **仓库 / 区域 / 货架**：`warehouseId` 必填且必须未删除（否则 `1001`）；`areaId` / `shelfId` 可空，填了就必须存在且与 `warehouseId` 同仓库，否则 `1001` / `1003`。
+- **仓库 / 货架**：`warehouseId` 必填且必须未删除（否则 `1001`）；`shelfId` 可空，填了就必须存在且与 `warehouseId` 同仓库，否则 `1001` / `1003`。
 - **明细**：至少一条（空数组返回 `1003`）；同一张单里同一款手办只能出现一次（重复返回 `1003`）；`quantity` 必须 ≥ 1（`1003`）；`unitPrice` 可空、不可为负。
 - **合计不信任前端**：`totalQuantity` / `totalAmount` / `amount` 全部由后端按明细重算，请求里传了也会被忽略。
 - **状态流转**：`D` 待入库 →（INB-08 确认）→ `C` 已入库；`D` / `C` →（INB-09 作废）→ `X`。**只有 `D` 可编辑 / 删除**（否则 `1000`）；`C` 不能重复确认；`X` 不能确认、不能再作废。
-- **部分更新保护**：确认 / 作废只更新 `status`（必要时补 `inboundTime`），不会改动供应商、区域、货架、备注等其他字段。
+- **部分更新保护**：确认 / 作废只更新 `status`（必要时补 `inboundTime`），不会改动供应商、货架、备注等其他字段。
 - **库存联动**：目前尚无 `stock` 库存表，确认入库只改单据状态、不累加库存；库存表落地后在 `InboundService.confirm` 内补充扣加逻辑。
 - **权限**：查询 / 详情 / 统计 / 字典——任意登录用户；新增 / 编辑 / 删除 / 确认 / 作废——主管级及以上（ADMIN / GM / 各部门主管）。
-- **初始数据**：`InboundDataInitializer` 在入库单表为空时写入 4 条演示单（3 条已入库 / 1 条待入库，含区域与货架关联），依赖仓库(5)→区域(10)→货架(20)→手办(30) 的初始化顺序。
+- **初始数据**：`InboundDataInitializer` 在入库单表为空时写入 4 条演示单（3 条已入库 / 1 条待入库，含货架关联），依赖仓库(5)→货架(20)→手办(30) 的初始化顺序。
 
 ### INB-01 分页查询入库单
 
@@ -2044,8 +2249,6 @@ GET /api/area/page?page=1&size=10&warehouseId=1&status=A
         "warehouseId": 1,
         "warehouseCode": "3101",
         "warehouseName": "上海库",
-        "areaId": 2,
-        "areaName": "B区-收纳箱",
         "shelfId": 1,
         "shelfCode": "01-1",
         "supplier": "ALTER 官方渠道",
@@ -2146,7 +2349,6 @@ GET /api/area/page?page=1&size=10&warehouseId=1&status=A
 | inboundNo | String | 否 | 自动生成 | ≤50，未删除内唯一 | 留空按 `RK + 日期 + 序号` 生成 |
 | inboundType | String | 否 | `P` | `^[PRTO]$` | 入库类型 |
 | warehouseId | Long | **是** | — | 必须存在 | 入库仓库 |
-| areaId | Long | 否 | — | 须与仓库一致 | 入库区域 |
 | shelfId | Long | 否 | — | 须与仓库一致 | 入库货架 |
 | supplier | String | 否 | — | ≤100 | 供应商 / 来源单位 |
 | inboundTime | String | 否 | 当前时间 | ISO-8601 | 入库时间 |
@@ -2164,7 +2366,6 @@ GET /api/area/page?page=1&size=10&warehouseId=1&status=A
 {
   "inboundType": "P",
   "warehouseId": 1,
-  "areaId": 1,
   "shelfId": 1,
   "supplier": "Good Smile Company 中国代理",
   "inboundTime": "2026-11-07T10:30:00",
@@ -2189,7 +2390,6 @@ GET /api/area/page?page=1&size=10&warehouseId=1&status=A
 | 1003 | 请至少添加一条手办明细 | `items` 为空 |
 | 1003 | 入库数量必须大于 0 | `quantity` < 1（或参数校验 `400`） |
 | 1003 | 同一张入库单里同一款手办只能出现一次 | 明细里 `productId` 重复 |
-| 1003 | 所选区域不属于该仓库，请重新选择 | 区域与仓库不匹配 |
 | 1001 | 入库仓库不存在或已被删除 | `warehouseId` 无效 |
 | 1001 | 手办不存在或已被删除，请重新选择 | `productId` 无效 |
 | 1002 | 入库单号已存在：RK2026… | 手填单号重复 |
@@ -2205,7 +2405,7 @@ GET /api/area/page?page=1&size=10&warehouseId=1&status=A
 - **仅 `D` 待入库可编辑**；`C` / `X` 返回 `1000`。
 - 明细**整体替换**：先逻辑删除旧明细再插入提交的明细，保证明细与提交内容完全一致。
 - `inboundNo` 留空时沿用原单号；`inboundTime` 留空时沿用原时间；`operator` 留空时**沿用原经办人**（不要因为编辑把责任人抹掉）。
-- `areaId` / `shelfId` / `supplier` / `remark` 传 `null` 或空串会真正清空（实体上标了 `FieldStrategy.ALWAYS`）。
+- `shelfId` / `supplier` / `remark` 传 `null` 或空串会真正清空（实体上标了 `FieldStrategy.ALWAYS`）。
 
 **出参**：`Result<Void>`
 
@@ -2237,7 +2437,9 @@ GET /api/area/page?page=1&size=10&warehouseId=1&status=A
 
 `PUT /api/inbound/{id}/confirm` · 主管级及以上 · `InboundController#confirm`
 
-**规则**：`D` → `C`；只改状态列（若 `inboundTime` 为空则补当前时间），**不会清空供应商 / 区域 / 货架 / 备注**；没有明细时返回 `1000`。
+**规则**：`D` → `C`；只改状态列（若 `inboundTime` 为空则补当前时间），**不会清空供应商 / 货架 / 备注**；没有明细时返回 `1000`。
+
+**同时累加库存**（同一事务）：按明细把 `数量` 累加到 `stock` 表「同手办 + 同仓库 + 同货架」那一行，没有就新建一行；成本按 `数量 × 单价` 累加到该行的 `total_cost`（单价为空时按现有均价折算，避免只加数量不加成本把均价冲低）。库存写失败则单据状态一并回滚。
 
 **出参**：`Result<Void>`，`message` 为「已确认入库」
 
@@ -2257,6 +2459,8 @@ GET /api/area/page?page=1&size=10&warehouseId=1&status=A
 
 **规则**：`D` / `C` → `X`；同样只改状态列。已作废重复调用返回 `1000`。
 
+**已入库单作废会回退库存**：原状态是 `C` 时，按明细从 `stock` 里扣掉对应数量和成本（按明细单价冲销，和当初累加的是同一笔钱）；扣到 0 件的库存行直接逻辑删除，不留下空行。原状态是 `D` 的草稿从未加过库存，只改状态。
+
 **出参**：`Result<Void>`，`message` 为「已作废」
 
 **错误码**
@@ -2267,6 +2471,80 @@ GET /api/area/page?page=1&size=10&warehouseId=1&status=A
 | 403 | 没有权限作废入库单，请联系管理员或主管 | 执行级账号 |
 | 1000 | 该入库单已经作废，无需重复操作 | 状态已是 `X` |
 | 1001 | 入库单不存在或已被删除 | id 无效 |
+
+### 9.4 共享结构 `StockVO` / `StockLocationVO` / `StockSummaryVO`
+
+**`StockVO`（列表行 = 一款手办的库存汇总）**
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| productId | Long | 手办商品 ID |
+| productName | String | 手办名称（商品还在时取档案当前值，已下架时取入库快照） |
+| productCode | String | 货号 / SKU，未填为空 |
+| brand | String | 品牌名称 |
+| imageUrl | String | 首图 URL，商品已下架时为空 |
+| productDeleted | Boolean | 商品是否已逻辑删除（下架） |
+| productStatus | Integer | 商品状态：1 在售 / 0 停用；已下架时为 null |
+| productStatusText | String | 在售 / 已停用 / 已下架 |
+| totalQuantity | Integer | 在库件数合计 |
+| totalAmount | BigDecimal | 库存金额合计（成本总额） |
+| avgCost | BigDecimal | 均价 = 金额 / 件数，仅供展示 |
+| locationCount | Integer | 分布在几个库位 |
+| lastInboundTime | LocalDateTime | 最近一次入库时间 |
+
+**`StockLocationVO`（库位明细）**
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | Long | 库存行 ID |
+| warehouseId / warehouseCode / warehouseName | Long / String / String | 仓库；仓库被删时只有 id |
+| shelfId / shelfCode / shelfLocation | Long / String / String | 货架编号与库位描述（如 `01区-1层`） |
+| quantity | Integer | 该库位在库件数 |
+| avgCost | BigDecimal | 该库位均价 |
+| amount | BigDecimal | 该库位库存金额 |
+| lastInboundTime | LocalDateTime | 该库位最近入库时间 |
+
+**`StockSummaryVO`**：`skuCount`（在库款式数）/ `totalQuantity`（在库总件数）/ `totalAmount`（库存总金额）/ `warehouseCount`（涉及仓库数）/ `locationCount`（占用库位数）。
+
+### STK-01 分页查询库存
+
+`GET /api/stock/page` · 登录用户 · `StockController#page`
+
+**入参 `StockQuery`**
+
+| 字段 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| page | Integer | 否 | 1 | 页码 |
+| size | Integer | 否 | 10 | 每页条数，上限 200 |
+| keyword | String | 否 | — | 模糊匹配手办名称 / 货号 / 品牌 |
+| warehouseId | Long | 否 | — | 只看某个仓库的库存 |
+| sortBy | String | 否 | QUANTITY | `QUANTITY` 件数降序 / `AMOUNT` 金额降序 / `RECENT` 最近入库优先 / `NAME` 名称升序 |
+
+**规则**
+
+- 只统计 `quantity > 0` 的库存行；按 `product_id` 聚合（`SUM(quantity)` / `SUM(total_cost)` / `COUNT(*)` 作为库位数）。
+- 排序与分页在服务端内存里完成：聚合行的排序键是聚合后的别名，统一放 Java 里处理，避免 SQL 别名与关联商品字段混用。
+- 商品还在时名称 / 货号 / 品牌 / 图片以**商品档案的当前值**为准（厂商改名后自动同步）；商品已被逻辑删除时退回入库快照，并置 `productDeleted=true`。
+
+**出参**：`Result<PageResult<StockVO>>`
+
+**错误码**：`401`（未登录）、`1003`（`page < 1` 或 `size` 超范围）。
+
+### STK-02 库存统计
+
+`GET /api/stock/summary` · 登录用户 · `StockController#summary`
+
+**出参**：`Result<StockSummaryVO>`，与列表同口径（只算 `quantity > 0`）。
+
+### STK-03 手办的库位明细
+
+`GET /api/stock/{productId}/locations` · 登录用户 · `StockController#locations`
+
+**规则**：返回该手办在各仓库 / 货架上的库存行，按仓库 ID、货架 ID 升序；数量为 0 的行不返回；手办没有任何库存时返回空数组（不报 404）。
+
+**出参**：`Result<StockLocationVO[]>`
+
+**错误码**：`401`（未登录）。
 
 ---
 
@@ -2698,9 +2976,16 @@ ACG 作品是**主数据**：一方面给商品、订单等业务表提供「作
 
 ### MFG-09 厂商下拉选项
 
-`GET /api/manufacturer/options?keyword=` · 登录用户 · `ManufacturerController#options`
+`GET /api/manufacturer/options?keyword=&includeDisabled=` · 登录用户 · `ManufacturerController#options`
 
-**出参**：`Result<ManufacturerOptionVO[]>`，仅返回启用厂商（最多 200 条，按名称升序）：
+**入参（Query）**
+
+| 字段 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| keyword | String | 否 | — | 名称模糊匹配 |
+| includeDisabled | boolean | 否 | false | `false` 只返回启用厂商（用于录入表单）；`true` 连停用厂商一起返回（用于列表筛选历史数据） |
+
+**出参**：`Result<ManufacturerOptionVO[]>`，最多 200 条，按名称升序：
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
@@ -3259,10 +3544,69 @@ GET /api/todo/page?page=1&size=20&startDate=2026-11-01&endDate=2026-11-30&status
 ### 13.15 入库单状态 `status`
 
 | code | 文案 | 含义 | 可编辑 | 可删除 | 可确认 | 可作废 |
-|---|---|:--:|:--:|:--:|:--:|
+|---|---|:--:|:--:|:--:|:--:|:--:|
 | D | 待入库 | 草稿，还没确认 | ✅ | ✅ | ✅ | ✅ |
 | C | 已入库 | 已确认，计入本月统计 | ❌ | ❌ | ❌ | ✅ |
 | X | 已作废 | 单据作废，仅留档 | ❌ | ❌ | ❌ | ❌ |
+
+### 13.16 请假类型 `leaveType`
+
+| code | 文案 | 说明 |
+|---|---|---|
+| A | 事假 | 个人事务，按天 / 半天计 |
+| B | 病假 | 建议在事由里写明就诊情况 |
+| C | 年假 | 计入年假余额（余额功能暂未开放，仅做类型区分） |
+| D | 调休 | 与加班时长对应，用于抵扣 |
+| E | 婚假 | 长期假，跨天按天数累加 |
+| F | 产假 | 长期假，跨天按天数累加 |
+| G | 其他 | 兜底类型，需在事由里说明 |
+
+> 新增类型只需在 `LeaveType` 常量类追加一行，`LV-04` 字典接口与前端下拉自动带上；历史数据不要改 code。
+
+### 13.17 加班类型 `overtimeType`
+
+| code | 文案 | 说明 |
+|---|---|---|
+| W | 工作日加班 | 下班后继续工作 |
+| O | 休息日加班 | 周六 / 周日 |
+| H | 节假日加班 | 法定节假日 |
+
+> 三种类型目前只做分类标记与统计区分，不参与薪资折算；后续接薪资时按类型配不同倍率。
+
+### 13.18 申请单状态 `status`（请假 / 加班共用）
+
+| code | 文案 | 可编辑 | 可撤销 | 可审批 | 可删除 |
+|---|---|:--:|:--:|:--:|:--:|
+| P | 待审批 | ✅ | ✅ | ✅ | ✅ |
+| A | 已通过 | ❌ | ❌ | ❌ | ❌ |
+| R | 已驳回 | ❌ | ❌ | ❌ | ❌ |
+| C | 已撤销 | ❌ | ❌ | ❌ | ❌ |
+
+- `A` / `R` / `C` 都是终态，要改只能重新提交一张新单；
+- 审批只认 `P`，且**不能审批自己提交的单**（服务端拦截，返回 `403`）；
+- 审批更新带 `status = 'P'` 条件，并发下第二个人会拿到「单据已被处理」。
+
+### 13.19 考勤状态 `checkInStatus` / `checkOutStatus`
+
+上班卡（`checkInStatus`）：
+
+| code | 文案 | 判定 |
+|---|---|---|
+| N | 正常 | 打卡时间 ≤ 09:00 |
+| L | 迟到 | 打卡时间 > 09:00 |
+
+下班卡（`checkOutStatus`）：
+
+| code | 文案 | 判定 |
+|---|---|---|
+| N | 正常 | 打卡时间 ≥ 18:00 |
+| E | 早退 | 打卡时间 < 18:00 |
+| M | 未打卡 | 非销售岗但下班时间留空 |
+| X | 免打卡 | 销售岗（`SALES_MANAGER` / `SALES_STAFF`）只打上班卡 |
+
+> 判定统一由 `AttendanceRule` 一处实现，Service 与种子数据初始化器共用，避免两套规则漂移；
+> 两个状态的 code 空间独立（上班只有 N / L，下班有 N / E / M / X），互不干扰。
+> 销售岗下班时间一律落库为 `NULL`，前端表单选中销售员工后自动禁用下班时间选择器。
 
 ---
 
@@ -3282,6 +3626,10 @@ GET /api/todo/page?page=1&size=20&startDate=2026-11-01&endDate=2026-11-30&status
 | v1.9 | 2026-11-07 | 变更（移除字段） | SYS-03 / AUTH-01~02 / USER-01~04 / §3.1 / §13.2 | 移除「涉密等级」：`UserVO` 去掉 `securityLevel` / `securityLevelLabel`，`UserQuery` / `UserSaveRequest` 去掉 `securityLevel`（含必填校验），字典接口不再返回 `securityLevels`，JWT 不再携带 `level` claim，实体与 `sys_user` 表删除 `security_level` 列及索引；前端员工列表/维护、右上角、个人信息同步移除；接口总数不变（76） |
 | v2.0 | 2026-11-07 | 新增 | INB-01~INB-09 / §9.4 / §13.14~13.15 | 库存管理 → 入库记录 由占位页改为接口驱动：新增入库单主表 `inbound_order`（单号/类型/仓库/区域/货架/供应商/状态/数量金额合计/入库时间/经办人）与明细表 `inbound_item`（手办/数量/单价/小计，含名称与货号快照）；支持分页筛选（单号/供应商/经办人/手办名称模糊 + 仓库/类型/状态/日期区间）、详情含明细、顶部统计卡（待入库数、本月单数/件数/金额）、单号自动生成、明细整体替换、确认入库与作废流转；合计一律后端重算；接口总数 76 → 85 |
 | v2.1 | 2026-11-08 | 新增 | MFG-01~MFG-10 / §3.9 / §10.6~10.8 | 目录维护 → 厂商目录维护 由占位页改为接口驱动：新增 `manufacturer` 表（公司名称/厂牌 Logo/创立时间/国家地区/备注/状态），支持分页筛选（名称或国家地区模糊 + 国家地区/状态/排序）、详情、新增、编辑、删除、启用/停用、统计卡（总数/启用/停用/覆盖国家地区数）、国家地区筛选项、供其他业务表使用的下拉选项、Logo 上传；同名校验在未删除记录内；接口总数 85 → 95 |
+| v2.2 | 2026-11-08 | 变更 | PRO-01~PRO-04 / MFG-09 / §3.6 | 商品列表「品牌」接入厂商目录：`figure_product` 新增 `manufacturer_id`（厂商 ID，品牌来源），`brand` 改为保存时写入的厂商名称快照；PRO-01 新增 `manufacturerId` 精确过滤（`brand` 保留模糊匹配以兼容老数据）；PRO-03/04 支持 `manufacturerId`，传了则以厂商目录名称为准、厂商不存在返回 `1001`；§3.6 出参新增 `manufacturerId` / `manufacturerLogo`，`brand` 改为解析厂商当前名称；MFG-09 新增 `includeDisabled` 参数（录入表单只取启用厂商，列表筛选取全部）；接口总数仍为 95（仅参数与字段扩展） |
+| v2.3 | 2026-11-08 | 新增 | STK-01~STK-03 / §9.5 / INB-08 / INB-09 | 库存管理 → 手办列表 由占位页改为接口驱动：新增 `stock` 表（手办 + 仓库/区域/货架 + 在库件数 + 成本总额 + 最近入库时间），一行 = 某款手办在某个库位的库存；确认入库（INB-08）按明细累加、已入库单作废（INB-09）按明细单价冲销回退，扣到 0 件自动删行；提供按手办聚合的分页（名称/货号/品牌关键字、按仓库过滤、按件数/金额/入库时间/名称排序）、库存统计卡、库位明细；商品下架后仍用入库快照展示并标「已下架」；库存不提供手工增删改接口；接口总数 95 → 98 |
+| v2.4 | 2026-11-09 | 移除 | AREA-01~AREA-06 / §9.3 / §9.2 / INB-01~INB-09 / STK-01~STK-03 | 下线「库存管理 → 仓库设置 → 区域配置」整块功能：删除 `area` 表定义与 `AreaController/Service/Mapper/AreaVO/AreaQuery/AreaSaveRequest/AreaConverter`、`AreaDataInitializer` 及前端 `AreaConfig.vue`、`api/area.ts`、路由与菜单项；货架、入库单、库存三处去掉 `area_id` 依赖（`ShelfVO`/`ShelfQuery`/`ShelfSaveRequest`、`InboundOrderVO`/`InboundSaveRequest`、`StockLocationVO` 均不再有 `areaId`/`areaName`），层级简化为 `仓库 → 货架 → 库位`；仓库删除保护只校货架；接口总数 98 → 92（老库的 `area` 表与 `area_id` 列保留未删，代码已不读写） |
+| v2.5 | 2026-11-09 | 新增 | ATT-01~ATT-07 / LV-01~LV-09 / OT-01~OT-09 / §6 / §13.16~13.19 | 「员工权限管理」下新增三块功能：①**员工考勤记录**（`attendance_record`）记录上班/下班打卡时间，固定 9:00–18:00 判定迟到早退，销售岗（`SALES_MANAGER`/`SALES_STAFF`）只打上班卡、下班时间落 `NULL` 且下班状态记「免打卡」，打卡方式为手工录入（不做实时打卡按钮）；②**员工请假申请**（`leave_apply`）与③**员工加班申请**（`overtime_apply`），状态 P 待审批 → A 已通过 / R 已驳回，本人可撤销为 C，审批仅主管级及以上且**不可自审**（并发下带 status 条件保护），请假按跨天天数或同天 >240 分钟折 1 天、加班按小时保留 1 位小数并允许跨天；三块均提供分页/详情/顶部统计卡/字典接口，数据范围「执行级只看自己，主管与人事看全部」；新增 `AttendanceRule`、`ApplyStatus`、`ApproveRequest` 与 `UserRole.isSales/isHr`；种子数据开关 `app.init-attendance/leave/overtime`；接口总数 92 → 117 |
 
 <!--
 新增变更请追加在表格末尾，并把顶部「文档版本 / 最后更新」同步改掉。

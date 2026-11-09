@@ -111,6 +111,25 @@ public enum UserRole {
         return levelOf(code) >= LEVEL_MANAGER;
     }
 
+    /**
+     * 销售岗：销售主管 / 销售专员。
+     * <p>
+     * 考勤上只录上班时间，下班卡免打（外勤、跑客户，下班时间不固定）。
+     */
+    public static boolean isSales(String code) {
+        return SALES_MANAGER.code.equals(code) || SALES_STAFF.code.equals(code);
+    }
+
+    /**
+     * 人事岗：人事主管 / 人事专员。
+     * <p>
+     * 人事专员是执行级（level 1），但考勤、请假、加班这些单据本来就归人事管，
+     * 所以「能不能看全部员工的数据」对他们单独放行 —— 只放开查看，增删改仍按各自规则的权限走。
+     */
+    public static boolean isHr(String code) {
+        return HR_MANAGER.code.equals(code) || HR_STAFF.code.equals(code);
+    }
+
     /** 所有管理级角色编码，用于「至少保留一个管理级账号」这类查询 */
     public static List<String> adminCodes() {
         return Arrays.stream(values())

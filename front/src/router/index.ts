@@ -128,6 +128,24 @@ const routes = [
         name: 'EmployeeMaintain',
         component: () => import('@/views/staff/EmployeeMaintain.vue'),
         meta: { title: '员工维护', icon: 'Setting' }
+      },
+      {
+        path: 'attendance',
+        name: 'AttendanceRecord',
+        component: () => import('@/views/staff/AttendanceRecord.vue'),
+        meta: { title: '员工考勤记录', icon: 'Timer' }
+      },
+      {
+        path: 'leave',
+        name: 'LeaveApply',
+        component: () => import('@/views/staff/LeaveApply.vue'),
+        meta: { title: '员工请假申请', icon: 'Calendar' }
+      },
+      {
+        path: 'overtime',
+        name: 'OvertimeApply',
+        component: () => import('@/views/staff/OvertimeApply.vue'),
+        meta: { title: '员工加班申请', icon: 'AlarmClock' }
       }
     ]
   },

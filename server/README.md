@@ -20,7 +20,7 @@
 
 ## 接口契约（改接口必看）
 
-**[`docs/api-contract.md`](docs/api-contract.md)** 是前后端之间的唯一约定来源，包含 85 个接口的名称、方法、路径、权限、入参、出参、错误码与示例，以及枚举字典和变更记录。
+**[`docs/api-contract.md`](docs/api-contract.md)** 是前后端之间的唯一约定来源，包含 117 个接口的名称、方法、路径、权限、入参、出参、错误码与示例，以及枚举字典和变更记录。
 
 维护规则：**任何改动对外契约的提交，必须同时更新该文件的「接口总览表 + 接口详情 + 变更记录」**。判断标准、版本号规则见文档开头「§0 维护规则」。
 
@@ -33,7 +33,7 @@ server/
 ├── mvnw / mvnw.cmd              # Maven Wrapper，本机无需装 Maven
 ├── pom.xml
 ├── config/application-dev.yml   # 本地覆盖配置（数据库密码），不进 git
-├── db/schema.sql                # 建库脚本（含 figure_product、warehouse、area、shelf、inbound_order、inbound_item、acg_work、sys_message、work_todo 等业务表）
+├── db/schema.sql                # 建库脚本（含 figure_product、warehouse、shelf、inbound_order、inbound_item、stock、manufacturer、acg_work、sys_message、work_todo、attendance_record、leave_apply、overtime_apply 等业务表）
 ├── docs/api-contract.md         # 接口契约（对外唯一约定，改接口必须同步）
 └── src/main/
     ├── java/com/figureerp/
@@ -122,7 +122,7 @@ mysql -uroot -p < db/schema.sql
 - [x] 前端请求封装对接（axios 拦截器 + 统一错误提示）
 - [x] 员工表 + 登录鉴权（JWT + BCrypt）
 - [x] 员工管理 CRUD + 权限修改（角色/状态），带管理员保护规则
-- [x] 业务表结构与模块 CRUD（已落地：figure_product 手办商品模块、warehouse 仓库 / area 区域 / shelf 货架模块、acg_work ACG 作品与热度分析模块、sys_message 个人消息中心、work_todo 个人待办）
+- [x] 业务表结构与模块 CRUD（已落地：figure_product 手办商品模块、warehouse 仓库 / shelf 货架 / stock 库存模块、acg_work ACG 作品与热度分析模块、sys_message 个人消息中心、work_todo 个人待办）
 - [ ] 操作日志切面
 - [ ] 更多业务模块（货架 / 库位 / 订单等）
 
@@ -172,7 +172,7 @@ Authorization: Bearer eyJhbGciOiJIUzM4NCJ9...
 | 层级 | level | 角色 | 能做什么 |
 |---|:--:|---|---|
 | 管理级 | 3 | ADMIN 管理员、GM 总经理 | 员工账号增删改 + 全部业务 |
-| 主管级 | 2 | 财务 / 销售 / 物流 / 人事 各主管（旧版 `MANAGER` 同层） | 维护业务数据：商品、仓库、区域、货架、物流价格、ACG、发消息 |
+| 主管级 | 2 | 财务 / 销售 / 物流 / 人事 各主管（旧版 `MANAGER` 同层） | 维护业务数据：商品、仓库、货架、物流价格、ACG、发消息 |
 | 执行级 | 1 | 对应的各专员（旧版 `STAFF` 同层） | 只读业务数据 |
 
 权限校验只认层级：`CurrentUserService.requireManager()` 要求 `level >= 2`，
@@ -288,7 +288,8 @@ app:
 | `id` | bigint | 主键 |
 | `name` | varchar | 商品名称（手办全称），非空 |
 | `code` | varchar | 货号 / SKU，可空，唯一 |
-| `brand` / `series` / `character_name` / `material` | varchar | 品牌 / 系列 / 角色名 / 材质，可空 |
+| `manufacturer_id` | bigint | 厂商 `manufacturer.id`，商品的**品牌来源**（下拉选择），可空 |
+| `brand` / `series` / `character_name` / `material` | varchar | 品牌名称快照 / 系列 / 角色名 / 材质，可空 |
 | `length_cm` / `width_cm` / `height_cm` | decimal(6,1) | 长 / 宽 / 高（cm），可空 |
 | `weight_with_box` | int | **带盒重量（g，克）**，含外包装盒，非空、> 0 |
 | `images` | text | 商品图片 URL，逗号分隔，3~4 张 |
@@ -297,6 +298,14 @@ app:
 | 审计字段 + `deleted` | — | 来自 `BaseEntity`（逻辑删除） |
 
 表为空时 `ProductDataInitializer` 会插入 6 条演示数据（初音未来/明日香/御坂美琴/蕾姆/帕瓦/樱花版初音），受 `app.init-product.enabled` 控制（默认开启，只填空表）。
+
+### 品牌来自厂商目录
+
+- `brand` 不再是自由文本的「事实来源」：商品的品牌通过 `manufacturer_id` 关联「目录维护 → 厂商目录维护」，前端是下拉选择（`GET /api/manufacturer/options`）。
+- 保存时若传了 `manufacturerId`，后端用厂商的**当前名称**写入 `brand` 快照；未传则保留请求里的自由文本，兼容历史数据。
+- 查询 / 详情时按 `manufacturerId` 反查厂商，用厂商最新名称覆盖 `brand`（`brand` 与 `manufacturerLogo` 一并返回），因此**厂商改名后商品列表自动跟随**；厂商停用不影响展示，逻辑删除才退回快照文本。
+- 列表筛选用 `manufacturerId` 精确匹配（下拉），`brand` 模糊查询保留给未关联厂商的老数据。
+- ⚠️ `manufacturer_id` / `brand` 使用了 `FieldStrategy.ALWAYS`（为了让「编辑时清空」能写成 NULL），因此**任何局部更新都必须走 `LambdaUpdateWrapper`**，不能拿空实体 `updateById`，否则会把这两列写成 NULL（`updateStatus` 已按此实现）。
 
 ### 图片上传与存储
 
@@ -308,7 +317,7 @@ app:
 
 | 方法 | 路径 | 说明 | 权限 |
 |---|---|---|---|
-| GET | `/api/product/page` | 分页查询（名称/货号/品牌/系列/角色名模糊 + 状态） | 登录 |
+| GET | `/api/product/page` | 分页查询（名称/货号/厂商/系列/角色名 + 状态） | 登录 |
 | GET | `/api/product/{id}` | 详情 | 登录 |
 | POST | `/api/product` | 新增（带盒重量>0、图片 3~4 张、货号唯一） | 管理员/主管 |
 | PUT | `/api/product/{id}` | 编辑 | 管理员/主管 |
@@ -318,11 +327,13 @@ app:
 
 详细入参 / 出参 / 错误码见契约文档 §8 与 §3.6。
 
-## 库存基础档案模块（module/stock：仓库 / 区域 / 货架）
+## 库存基础档案模块（module/stock：仓库 / 货架 / 入库记录 / 库存）
 
-库存管理 → 仓库设置 下的三个基础档案页面。原先的数据都写死在页面里（`LocationManage/index.vue`、`ShelvesManage.vue`、`AreaConfig.vue`），现已全部落库，查询 / 新增 / 编辑 / 删除 / 详情都走接口，操作后立即重新拉取列表。
+库存管理下的四个页面：仓库设置（库位管理 / 货架管理）、入库记录、手办列表。原先的数据都写死在页面里（`LocationManage/index.vue`、`ShelvesManage.vue`），现已全部落库，查询 / 新增 / 编辑 / 删除 / 详情都走接口，操作后立即重新拉取列表。
 
-层级关系：`仓库 → 区域 → 货架 → 库位`。仓库是顶层；区域挂在仓库下且必选仓库；货架挂在仓库下，可选挂区域（`area_id` 可空，老数据不受影响）。
+层级关系：`仓库 → 货架 → 库位`。仓库是顶层，货架挂在仓库下且必选仓库。
+
+> 原「区域配置」页面（`area` 表 / AREA-* 接口）已下线，层级由 `仓库 → 区域 → 货架` 简化为 `仓库 → 货架`；货架、入库单、库存都不再有 `area_id`。老库里的 `area` 表与 `area_id` 列没有物理删除，但代码已不读写，确认不再回滚后可按需 `DROP`。
 
 ### 仓库档案 `warehouse`
 
@@ -355,43 +366,6 @@ app:
 
 详细入参 / 出参 / 错误码见契约文档 §9。
 
-### 区域档案 `area`
-
-库存管理 → 仓库设置 → 区域配置 页面维护的数据，一条记录 = 某个仓库下的一片区域（如 `A区-核心展示柜`）。
-
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `id` | bigint | 主键 |
-| `area_code` | varchar(50) | 区域编号，如 `A`；**同一仓库 + 未删除**范围内唯一 |
-| `area_name` | varchar(100) | 区域名称，如 `A区-核心展示柜` |
-| `warehouse_id` | bigint | 所属仓库 `warehouse.id`，必填 |
-| `location` | varchar(100) | 物理位置，如 `一层-主墙面`，可空 |
-| `capacity` | int | 容量：可容纳货架数（原页面「容量 / 格子数」） |
-| `status` | char(1) | `A` 使用中 / `D` 停用 |
-| `remark` | varchar(255) | 备注 |
-| `sort_no` | int | 排序号，越小越靠前 |
-| 审计字段 + `deleted` | — | 来自 `BaseEntity`（逻辑删除） |
-
-表为空时 `AreaDataInitializer` 会按仓库代码（3101 / 3102）关联插入 3 条初始区域，受 `app.init-area.enabled` 控制（默认开启，只填空表；找不到对应仓库的种子会跳过）。它用 `@Order(10)` 排在 `ShelfDataInitializer(20)` 之前，保证货架初始化时能按「仓库 + 区域编号」找到刚建好的区域。
-
-设计说明：
-
-- **为什么 `warehouse_id` 必填**：原页面 3 条区域没有归属仓库，落库后如果不挂仓库就是孤立数据，查不出「这是哪个仓库的 A 区」。
-- **为什么编号只在同一仓库内唯一**：每个仓库都会有自己的 `A/B/C` 区，全局唯一不现实；和货架同套做法，不建 UNIQUE（逻辑删除会占用索引），由 `AreaService` 校验。
-- **列表里的「已放货架」**：`AreaVO.shelfCount` 由后端按当前页区域批量算一次（一次 `in` 查询后在内存分组），前端直接显示 `2 / 20 个货架`，不用逐行请求货架接口。
-- **删除 / 改仓库保护**：区域下还有未删除货架时，删除区域返回 `1000`；把有货架的区域改到其他仓库同样返回 `1000`，避免货架与区域仓库不一致。
-
-| 方法 | 路径 | 说明 | 权限 |
-|---|---|---|---|
-| GET | `/api/area/page` | 分页查询（编号/名称模糊，仓库/状态过滤） | 登录 |
-| GET | `/api/area/{id}` | 详情 | 登录 |
-| POST | `/api/area` | 新增（同仓库编号唯一） | 管理员/主管 |
-| PUT | `/api/area/{id}` | 编辑（区域下有货架时不能换仓库） | 管理员/主管 |
-| DELETE | `/api/area/{id}` | 删除（逻辑删除；区域下有货架时拒绝） | 管理员/主管 |
-| PUT | `/api/area/{id}/status` | 修改状态（A/D） | 管理员/主管 |
-
-详细入参 / 出参 / 错误码见契约文档 §9（AREA-01~06）。
-
 ### 入库单 `inbound_order` / 明细 `inbound_item`
 
 库存管理 → 入库记录 页面维护的数据。一条 `inbound_order` = 一次入库业务（一张入库单），
@@ -405,7 +379,6 @@ app:
 | `inbound_no` | varchar(50) | 入库单号，如 `RK202611070001`；**未删除**范围内唯一 |
 | `inbound_type` | char(1) | `P` 采购 / `R` 退货 / `T` 调拨 / `O` 其他 |
 | `warehouse_id` | bigint | 入库仓库 `warehouse.id`，必填 |
-| `area_id` | bigint | 入库区域 `area.id`，可空；须与仓库一致 |
 | `shelf_id` | bigint | 入库货架 `shelf.id`，可空；须与仓库一致 |
 | `supplier` | varchar(100) | 供应商 / 来源单位，可空 |
 | `status` | char(1) | `D` 待入库 / `C` 已入库 / `X` 已作废 |
@@ -447,9 +420,44 @@ app:
 
 - **为什么拆主表 + 明细**：一次到货通常包含多款手办，塞进主表只能记成多条互不关联的记录，或者把商品名拼成一坨文本，无法统计单品入库量。
 - **合计为什么后端算**：`totalQuantity` / `totalAmount` / `amount` 一律按明细重算，忽略前端传值，避免列表数字与明细对不上。
-- **确认 / 作废为什么用 `LambdaUpdateWrapper`**：`supplier` / `area_id` / `shelf_id` / `remark` 标了 `FieldStrategy.ALWAYS`（编辑时要能清空），如果用空实体 `updateById`，这些列会被一并写成 `NULL`——所以只 `set` 状态列。
-- **库存联动**：目前没有 `stock` 库存表，确认入库只改单据状态、不累加库存；库存表落地后在 `InboundService.confirm` 内补扣加逻辑。
-- **初始数据**：表为空时 `InboundDataInitializer` 写入 4 条演示单（3 已入库 / 1 待入库）+ 6 条明细，受 `app.init-inbound.enabled` 控制；执行顺序 仓库(5) → 区域(10) → 货架(20) → 手办(30) → 入库单(40)。
+- **确认 / 作废为什么用 `LambdaUpdateWrapper`**：`supplier` / `shelf_id` / `remark` 标了 `FieldStrategy.ALWAYS`（编辑时要能清空），如果用空实体 `updateById`，这些列会被一并写成 `NULL`——所以只 `set` 状态列。
+- **库存联动**：确认入库（`confirm`）在同一事务内调 `StockService.applyInbound` 累加 `stock`；已入库单作废（`cancel`）调 `revertInbound` 按明细单价冲销回退，扣到 0 件自动删行。草稿作废不碰库存。
+- **初始数据**：表为空时 `InboundDataInitializer` 写入 4 条演示单（3 已入库 / 1 待入库）+ 6 条明细，受 `app.init-inbound.enabled` 控制；执行顺序 仓库(5) → 货架(20) → 手办(30) → 入库单(40)。
+
+### 库存 `stock`
+
+库存管理 → 手办列表 页面展示的数据。一行 = **某一款手办在某个库位（仓库 / 货架）上的在库数量**，
+页面按手办汇总（`SUM`），点「库位明细」看分布。
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `id` | bigint | 主键 |
+| `product_id` | bigint | 手办 `figure_product.id`，必填 |
+| `product_name` / `product_code` | varchar | 入库时的**快照**，商品下架后库存页仍要显示「这是什么货」 |
+| `brand` | varchar(100) | 品牌快照 |
+| `warehouse_id` | bigint | 所在仓库，必填 |
+| `shelf_id` | bigint | 所在货架，可空（入库时没填就没有） |
+| `quantity` | int | 在库件数，确认入库累加、作废回退 |
+| `total_cost` | decimal(14,2) | 库存成本总额 = Σ 数量 × 单价；均价由 `总额 / 数量` 算出 |
+| `last_inbound_time` | datetime | 最近一次入库时间 |
+| 审计字段 + `deleted` | — | 来自 `BaseEntity`（逻辑删除） |
+
+| 方法 | 路径 | 说明 | 权限 |
+|---|---|---|---|
+| GET | `/api/stock/page` | 分页（按手办聚合；名称/货号/品牌模糊、按仓库过滤、按件数/金额/入库时间/名称排序） | 登录 |
+| GET | `/api/stock/summary` | 统计卡（在库款式 / 件数 / 金额 / 涉及仓库 / 占用库位） | 登录 |
+| GET | `/api/stock/{productId}/locations` | 某款手办的库位明细 | 登录 |
+
+详细入参 / 出参 / 错误码见契约文档 §9.5（STK-01~03）。
+
+设计说明：
+
+- **为什么没有写接口**：库存只由入库单驱动（确认累加、作废回退），手工改库存会和入库记录对不上账，所以这一层只读。
+- **为什么存 `total_cost` 而不是均价**：均价是「总额 / 数量」的展示值。存均价的话，作废回退时除不干净——6 件 50 元 + 4 件 100 元入库后均价 70，作废后 6 件会被算成 420 元。存总额只需加减，回退按明细单价冲销，能精确对冲。
+- **为什么一行一库位**：只知道「这款还有 5 件」没法拣货，拆到库位后页面既能汇总也能下钻。
+- **商品下架后**：逻辑删除的商品查不出来，此时名称 / 货号 / 品牌退回入库快照，前端标「已下架」，提醒处理滞留库存。
+- **聚合实现**：`QueryWrapper` + `groupBy("product_id")` + `selectMaps`，不写 XML；排序与分页在服务层内存完成（在库款式是百级规模）。
+- **初始数据**：表为空时 `StockDataInitializer` 用「已入库」的单据回填一遍，受 `app.init-stock.enabled` 控制，执行顺序在入库单初始化的后面（50）。已有库存行就不再跑，避免重启把作废后的数量加回来。
 
 ### 货架档案 `shelf`
 
@@ -462,7 +470,6 @@ app:
 | `id` | bigint | 主键 |
 | `shelf_code` | varchar(50) | 货架编号，如 `01-1`；**同一仓库 + 未删除**范围内唯一 |
 | `warehouse_id` | bigint | 所属仓库 `warehouse.id` |
-| `area_id` | bigint | 所属区域 `area.id`，**可空**（不填表示未分区）；填了必须与 `warehouse_id` 同仓库 |
 | `location` | varchar(100) | 库位信息，如 `01区-1层`，可空 |
 | `status` | char(1) | `A` 正常 / `B` 维护中 / `D` 停用 |
 | `remark` | varchar(255) | 状态描述 / 备注 |
@@ -473,13 +480,12 @@ app:
 
 设计说明：
 
-- **为什么 `area_id` 可空**：货架先于区域落库，已有数据没有区域；给可空列后老数据不用洗，新货架可以在页面上选「所属区域」。填写时 `ShelfService` 会校验区域存在且与货架同仓库，避免「3101 的货架挂在 3301 的区域下」。
 - **为什么编号只在同一仓库内唯一**：不同城市的仓库都会用 `01-1` 这种短编号，全局唯一不现实；因此不建 UNIQUE 索引（逻辑删除还会占用索引），由 `ShelfService` 在「同仓库 + 未删除」范围内校验。
-- **删除保护**：仓库下还有未删除货架或区域时，删除仓库会被拦下并提示先删下层数据（`1000`），避免出现指向不存在仓库的货架/区域。
+- **删除保护**：仓库下还有未删除货架时，删除仓库会被拦下并提示先删货架（`1000`），避免出现指向不存在仓库的货架。
 
 | 方法 | 路径 | 说明 | 权限 |
 |---|---|---|---|
-| GET | `/api/shelf/page` | 分页查询（编号/库位信息模糊，仓库/区域/状态过滤） | 登录 |
+| GET | `/api/shelf/page` | 分页查询（编号/库位信息模糊，仓库/状态过滤） | 登录 |
 | GET | `/api/shelf/{id}` | 详情 | 登录 |
 | POST | `/api/shelf` | 新增（同仓库编号唯一） | 管理员/主管 |
 | PUT | `/api/shelf/{id}` | 编辑（可换仓库，按新仓库校验编号） | 管理员/主管 |
@@ -551,7 +557,7 @@ app:
 
 ## 厂商目录模块（module/manufacturer）
 
-左侧菜单「目录维护 → 厂商目录维护」。定位是**主数据**：维护手办 / 景品厂商（万代、BANPRESTO 眼镜厂、MegaHouse…）的厂牌 Logo、公司名称、创立时间、国家地区，供商品、入库等业务作为「厂商」下拉选项引用；停用后档案保留但不再出现在下拉中。
+左侧菜单「目录维护 → 厂商目录维护」。定位是**主数据**：维护手办 / 景品厂商（万代、BANPRESTO 眼镜厂、MegaHouse…）的厂牌 Logo、公司名称、创立时间、国家地区，供商品、入库等业务作为「厂商」下拉选项引用；停用后档案保留，**录入类下拉不再出现**（列表筛选仍可选到，便于查挂在已停用厂商上的历史数据）。
 
 ### 数据模型
 
@@ -576,7 +582,7 @@ app:
 | GET | `/api/manufacturer/{id}` | 详情 | 登录 |
 | GET | `/api/manufacturer/summary` | 统计：总数 / 启用 / 停用 / 覆盖国家地区数 | 登录 |
 | GET | `/api/manufacturer/countries` | 国家地区筛选项（去重升序） | 登录 |
-| GET | `/api/manufacturer/options` | 下拉选项（仅启用，按名称升序） | 登录 |
+| GET | `/api/manufacturer/options` | 下拉选项（默认仅启用；`includeDisabled=true` 含停用，按名称升序） | 登录 |
 | POST | `/api/manufacturer` | 新增（名称唯一） | 管理员/主管 |
 | PUT | `/api/manufacturer/{id}` | 编辑（可清空 Logo / 国家 / 备注） | 管理员/主管 |
 | DELETE | `/api/manufacturer/{id}` | 删除（逻辑删除） | 管理员/主管 |

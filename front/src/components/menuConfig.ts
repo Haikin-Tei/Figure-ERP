@@ -65,7 +65,10 @@ export const menuData: MenuItem[] = [
     index: '4',
     children: [
       { title: '员工列表', index: '/staff/list' },
-      { title: '员工维护', index: '/staff/maintain' }
+      { title: '员工维护', index: '/staff/maintain' },
+      { title: '员工考勤记录', index: '/staff/attendance' },
+      { title: '员工请假申请', index: '/staff/leave' },
+      { title: '员工加班申请', index: '/staff/overtime' }
     ]
   },
   {
