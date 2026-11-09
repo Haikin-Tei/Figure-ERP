@@ -72,8 +72,9 @@ export const getManufacturerSummaryApi = () =>
 export const getManufacturerCountriesApi = () =>
   request<string[]>({ url: '/manufacturer/countries', method: 'get' })
 
-export const getManufacturerOptionsApi = (keyword?: string) =>
-  request<ManufacturerOption[]>({ url: '/manufacturer/options', method: 'get', params: { keyword } })
+/** 下拉选项：默认只返回启用厂商，列表筛选可要求带上停用的 */
+export const getManufacturerOptionsApi = (params?: { keyword?: string; includeDisabled?: boolean }) =>
+  request<ManufacturerOption[]>({ url: '/manufacturer/options', method: 'get', params })
 
 export const createManufacturerApi = (data: ManufacturerSaveParams) =>
   request<number>({ url: '/manufacturer', method: 'post', data })

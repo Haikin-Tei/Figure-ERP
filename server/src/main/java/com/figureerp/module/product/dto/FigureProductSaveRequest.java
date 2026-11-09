@@ -27,7 +27,10 @@ public class FigureProductSaveRequest {
     @Schema(description = "货号 / SKU，可空，填写后不可与其他商品重复", example = "GSC-12345")
     private String code;
 
-    @Schema(description = "品牌", example = "Good Smile Company")
+    @Schema(description = "厂商 ID（来自厂商目录下拉），传了则以厂商名称为品牌")
+    private Long manufacturerId;
+
+    @Schema(description = "品牌名称；未传 manufacturerId 时按自由文本保存（兼容老数据）", example = "Good Smile Company")
     private String brand;
 
     @Schema(description = "系列", example = "Scale")

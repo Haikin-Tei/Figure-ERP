@@ -15,7 +15,12 @@ export interface FigureProduct {
   id: number
   name: string
   code?: string | null
+  /** 厂商 ID（厂商目录），为空表示未关联 */
+  manufacturerId?: number | null
+  /** 品牌 / 厂商名称，已关联时取厂商目录当前名称 */
   brand?: string | null
+  /** 厂商 Logo，已关联时返回 */
+  manufacturerLogo?: string | null
   series?: string | null
   characterName?: string | null
   material?: string | null
@@ -39,6 +44,9 @@ export interface FigureProductQueryParams {
   size?: number
   name?: string
   code?: string
+  /** 厂商 ID，精确过滤 */
+  manufacturerId?: number
+  /** 品牌名称模糊，兼容未关联厂商的老数据 */
   brand?: string
   series?: string
   characterName?: string
@@ -48,6 +56,9 @@ export interface FigureProductQueryParams {
 export interface FigureProductSaveParams {
   name: string
   code?: string
+  /** 厂商 ID；传了则品牌以厂商目录为准 */
+  manufacturerId?: number | null
+  /** 未选厂商时作为自由文本品牌保存 */
   brand?: string
   series?: string
   characterName?: string

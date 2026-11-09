@@ -24,6 +24,7 @@ public final class FigureProductConverter {
         vo.setId(p.getId());
         vo.setName(p.getName());
         vo.setCode(p.getCode());
+        vo.setManufacturerId(p.getManufacturerId());
         vo.setBrand(p.getBrand());
         vo.setSeries(p.getSeries());
         vo.setCharacterName(p.getCharacterName());

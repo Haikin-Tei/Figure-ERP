@@ -1,5 +1,7 @@
 package com.figureerp.module.product.entity;
 
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.figureerp.common.entity.BaseEntity;
 import lombok.Data;
@@ -24,7 +26,17 @@ public class FigureProduct extends BaseEntity {
     /** 货号 / SKU，可空，填写后不可与其他商品重复 */
     private String code;
 
-    /** 品牌，如 Good Smile Company */
+    /**
+     * 厂商 ID（manufacturer.id），商品品牌的来源。
+     * <p>
+     * {@code ALWAYS} 策略是为了让「编辑时清空厂商」能真正写成 NULL；
+     * 因此所有**局部更新**都必须走 LambdaUpdateWrapper，不能拿空实体 updateById。
+     */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private Long manufacturerId;
+
+    /** 品牌名称快照，保存时写入厂商正式名称；老数据可能只有该列（同样需要支持清空） */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String brand;
 
     /** 系列，如 Nendoroid / Scale */

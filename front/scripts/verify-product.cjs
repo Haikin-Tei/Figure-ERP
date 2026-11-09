@@ -1,6 +1,17 @@
 const { chromium } = require('playwright-core')
 const https = require('https')
 const http = require('http')
+const fs = require('fs')
+
+/** 生成 3 张 1x1 PNG 供上传用例使用（不依赖 /tmp 里已有的临时文件） */
+function ensureTestImages() {
+  const png =
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+  const buf = Buffer.from(png, 'base64')
+  for (const f of ['/tmp/t1.png', '/tmp/t2.png', '/tmp/t3.png']) {
+    fs.writeFileSync(f, buf)
+  }
+}
 
 const BASE = 'http://localhost:5173'
 const API = 'http://localhost:8080'
@@ -45,6 +56,7 @@ function api(method, path, token, body) {
 }
 
 ;(async () => {
+  ensureTestImages()
   const browser = await chromium.launch({ headless: true })
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
   const logs = []
@@ -83,10 +95,11 @@ function api(method, path, token, body) {
     const rowCount = await page.locator('.el-table__body tr').count()
     console.log(`✓ 商品列表加载，当前行数 = ${rowCount}`)
 
-    // 4) 验证「带盒重量」列展示（演示数据含 1200 g）
+    // 4) 验证「带盒重量」列展示（任意商品都应有「xxx g」）
     const weightText = await page.locator('.el-table__body').innerText()
-    if (!weightText.includes('1200')) throw new Error('未显示带盒重量 1200 g')
-    console.log('✓ 表格「带盒重量」列正常展示（含 1200 g）')
+    const weightHit = weightText.match(/(\d+)\s*g/)
+    if (!weightHit) throw new Error('表格未展示带盒重量（xxx g）')
+    console.log(`✓ 表格「带盒重量」列正常展示（${weightHit[0].trim()}）`)
     await page.screenshot({ path: '/tmp/shot-list.png' })
 
     // 5) 新增商品

@@ -55,10 +55,12 @@ public class ManufacturerController {
         return Result.success(manufacturerService.countries());
     }
 
-    @Operation(summary = "厂商下拉选项", description = "供其他业务表选择厂商，仅返回启用厂商")
+    @Operation(summary = "厂商下拉选项", description = "供其他业务表选择厂商；默认只返回启用厂商，includeDisabled=true 时一并返回停用厂商")
     @GetMapping("/options")
-    public Result<List<ManufacturerOptionVO>> options(@RequestParam(required = false) String keyword) {
-        return Result.success(manufacturerService.options(keyword));
+    public Result<List<ManufacturerOptionVO>> options(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false, defaultValue = "false") boolean includeDisabled) {
+        return Result.success(manufacturerService.options(keyword, includeDisabled));
     }
 
     @Operation(summary = "厂商目录统计", description = "总数 / 启用 / 停用 / 覆盖国家地区数")

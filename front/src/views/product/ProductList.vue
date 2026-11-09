@@ -15,6 +15,7 @@ import {
 import { useUserStore } from '@/stores/user'
 import { canManageBusiness } from '@/utils/role'
 import { getToken } from '@/utils/auth'
+import { getManufacturerOptionsApi, type ManufacturerOption } from '@/api/manufacturer'
 import axios from 'axios'
 import { formatTime } from '@/views/logistics/useLogisticsDict'
 
@@ -22,6 +23,25 @@ const userStore = useUserStore()
 
 /** 管理员和主管可以维护商品，普通员工只读 */
 const canManage = computed(() => canManageBusiness(userStore.userInfo))
+
+/* ---------------- 厂商下拉（品牌来源：目录维护 → 厂商目录维护） ---------------- */
+/** 表单用：只列启用厂商 */
+const manufacturerOptions = ref<ManufacturerOption[]>([])
+/** 筛选用：含停用厂商，便于查历史数据 */
+const filterManufacturerOptions = ref<ManufacturerOption[]>([])
+
+async function loadManufacturerOptions() {
+  try {
+    const [enabled, all] = await Promise.all([
+      getManufacturerOptionsApi({ includeDisabled: false }),
+      getManufacturerOptionsApi({ includeDisabled: true })
+    ])
+    manufacturerOptions.value = enabled
+    filterManufacturerOptions.value = all
+  } catch {
+    // 拦截器已提示；下拉为空时仍可保存未关联厂商的商品
+  }
+}
 
 /* ---------------- 列表 ---------------- */
 const loading = ref(false)
@@ -33,7 +53,7 @@ const query = reactive({
   size: 10,
   name: '',
   code: '',
-  brand: '',
+  manufacturerId: undefined as number | undefined,
   series: '',
   characterName: '',
   status: undefined as number | undefined
@@ -47,7 +67,7 @@ async function fetchList() {
       size: query.size,
       name: query.name || undefined,
       code: query.code || undefined,
-      brand: query.brand || undefined,
+      manufacturerId: query.manufacturerId,
       series: query.series || undefined,
       characterName: query.characterName || undefined,
       status: query.status
@@ -71,7 +91,7 @@ function handleSearch() {
 function handleReset() {
   query.name = ''
   query.code = ''
-  query.brand = ''
+  query.manufacturerId = undefined
   query.series = ''
   query.characterName = ''
   query.status = undefined
@@ -103,6 +123,9 @@ const imageUrls = ref<string[]>([])
 const form = reactive({
   name: '',
   code: '',
+  /** 选中的厂商（厂商目录），null 表示不关联 */
+  manufacturerId: undefined as number | undefined,
+  /** 品牌名称：选了厂商时等于厂商名称；老数据未关联厂商时保留原文本 */
   brand: '',
   series: '',
   characterName: '',
@@ -114,6 +137,24 @@ const form = reactive({
   status: 1,
   remark: ''
 })
+
+/** 表单下拉：启用厂商 + 当前商品已关联但已停用的厂商（否则编辑时回显不出名称） */
+const formManufacturerOptions = computed(() => {
+  const id = form.manufacturerId
+  if (!id || manufacturerOptions.value.some((m) => m.id === id)) {
+    return manufacturerOptions.value
+  }
+  return [
+    ...manufacturerOptions.value,
+    { id, name: form.brand || `厂商 #${id}`, logo: null, country: null }
+  ]
+})
+
+/** 选中厂商时把品牌文本同步成厂商名称，便于清空厂商后仍能看出原品牌 */
+function handleManufacturerChange(id?: number) {
+  const hit = manufacturerOptions.value.find((m) => m.id === id)
+  form.brand = hit ? hit.name : ''
+}
 
 const rules: FormRules = {
   name: [{ required: true, message: '请填写商品名称', trigger: 'blur' }],
@@ -163,6 +204,7 @@ function openCreate() {
   Object.assign(form, {
     name: '',
     code: '',
+    manufacturerId: undefined,
     brand: '',
     series: '',
     characterName: '',
@@ -185,6 +227,7 @@ function openEdit(row: FigureProduct) {
   Object.assign(form, {
     name: row.name,
     code: row.code ?? '',
+    manufacturerId: row.manufacturerId ?? undefined,
     brand: row.brand ?? '',
     series: row.series ?? '',
     characterName: row.characterName ?? '',
@@ -246,6 +289,7 @@ async function submitForm() {
     const payload: FigureProductSaveParams = {
       name: form.name.trim(),
       code: form.code.trim() || undefined,
+      manufacturerId: form.manufacturerId ?? null,
       brand: form.brand.trim() || undefined,
       series: form.series.trim() || undefined,
       characterName: form.characterName.trim() || undefined,
@@ -305,7 +349,10 @@ async function handleDelete(row: FigureProduct) {
   }
 }
 
-onMounted(fetchList)
+onMounted(() => {
+  loadManufacturerOptions()
+  fetchList()
+})
 </script>
 
 <template>
@@ -336,7 +383,22 @@ onMounted(fetchList)
       <div class="filter-bar">
         <el-input v-model="query.name" placeholder="商品名称" clearable style="width: 160px" @keyup.enter="handleSearch" @clear="handleSearch" />
         <el-input v-model="query.code" placeholder="货号 / SKU" clearable style="width: 140px" @keyup.enter="handleSearch" @clear="handleSearch" />
-        <el-input v-model="query.brand" placeholder="品牌" clearable style="width: 140px" @keyup.enter="handleSearch" @clear="handleSearch" />
+        <el-select
+          v-model="query.manufacturerId"
+          class="brand-filter"
+          placeholder="全部厂商"
+          clearable
+          filterable
+          style="width: 180px"
+          @change="handleSearch"
+        >
+          <el-option
+            v-for="m in filterManufacturerOptions"
+            :key="m.id"
+            :label="m.name"
+            :value="m.id"
+          />
+        </el-select>
         <el-input v-model="query.series" placeholder="系列" clearable style="width: 140px" @keyup.enter="handleSearch" @clear="handleSearch" />
         <el-input v-model="query.characterName" placeholder="角色名" clearable style="width: 140px" @keyup.enter="handleSearch" @clear="handleSearch" />
         <el-select v-model="query.status" placeholder="全部状态" clearable style="width: 120px" @change="handleSearch">
@@ -381,11 +443,14 @@ onMounted(fetchList)
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="品牌 / 系列" width="160">
+        <el-table-column label="品牌 / 系列" width="180">
           <template #default="{ row }">
-            <div class="sub-cell">
-              <span>{{ row.brand || '—' }}</span>
-              <span class="muted">{{ row.series || '—' }}</span>
+            <div class="brand-cell">
+              <el-avatar v-if="row.manufacturerLogo" :size="22" shape="square" :src="row.manufacturerLogo" />
+              <div class="sub-cell">
+                <span>{{ row.brand || '—' }}</span>
+                <span class="muted">{{ row.series || '—' }}</span>
+              </div>
             </div>
           </template>
         </el-table-column>
@@ -457,7 +522,28 @@ onMounted(fetchList)
           </el-col>
           <el-col :span="12">
             <el-form-item label="品牌">
-              <el-input v-model="form.brand" placeholder="如 Good Smile Company" maxlength="100" />
+              <el-select
+                v-model="form.manufacturerId"
+                placeholder="选择厂商"
+                clearable
+                filterable
+                style="width: 100%"
+                @change="handleManufacturerChange"
+              >
+                <el-option
+                  v-for="m in formManufacturerOptions"
+                  :key="m.id"
+                  :label="m.name"
+                  :value="m.id"
+                >
+                  <span class="opt-row">
+                    <el-avatar v-if="m.logo" :size="18" shape="square" :src="m.logo" />
+                    <span>{{ m.name }}</span>
+                    <span v-if="m.country" class="opt-country">{{ m.country }}</span>
+                  </span>
+                </el-option>
+              </el-select>
+              <div class="form-tip">选项来自厂商目录，厂商改名后商品品牌自动同步</div>
             </el-form-item>
           </el-col>
         </el-row>
@@ -652,6 +738,24 @@ onMounted(fetchList)
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+
+.brand-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.opt-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.opt-country {
+  margin-left: auto;
+  font-size: 12px;
+  color: #a8abb2;
 }
 
 .muted {

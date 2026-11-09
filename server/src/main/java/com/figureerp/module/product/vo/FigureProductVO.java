@@ -22,8 +22,14 @@ public class FigureProductVO {
     @Schema(description = "货号 / SKU")
     private String code;
 
-    @Schema(description = "品牌")
+    @Schema(description = "厂商 ID（manufacturer.id），为空表示未关联厂商目录")
+    private Long manufacturerId;
+
+    @Schema(description = "厂商 / 品牌名称；已关联厂商时取厂商目录的当前名称")
     private String brand;
+
+    @Schema(description = "厂商 Logo（已关联时返回，便于列表展示）")
+    private String manufacturerLogo;
 
     @Schema(description = "系列")
     private String series;

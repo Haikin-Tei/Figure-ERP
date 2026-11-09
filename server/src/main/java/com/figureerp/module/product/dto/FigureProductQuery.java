@@ -27,7 +27,10 @@ public class FigureProductQuery {
     @Schema(description = "货号 / SKU（模糊）")
     private String code;
 
-    @Schema(description = "品牌（模糊）")
+    @Schema(description = "厂商 ID（下拉精确过滤）")
+    private Long manufacturerId;
+
+    @Schema(description = "品牌名称（模糊，兼容未关联厂商的老数据）")
     private String brand;
 
     @Schema(description = "系列（模糊）")

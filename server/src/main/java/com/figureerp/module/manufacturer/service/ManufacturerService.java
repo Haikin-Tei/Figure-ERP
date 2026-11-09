@@ -94,12 +94,20 @@ public class ManufacturerService {
         return new ManufacturerSummaryVO(total, enabled, total - enabled, countries().size());
     }
 
-    /** 其他业务表选择厂商时的下拉选项，只返回启用厂商，按名称排序 */
-    public List<ManufacturerOptionVO> options(String keyword) {
+    /**
+     * 其他业务表选择厂商时的下拉选项，按名称排序。
+     *
+     * @param keyword         名称模糊关键字，可空
+     * @param includeDisabled 是否包含停用厂商：录入表单传 false（只选启用的），
+     *                        列表筛选传 true（历史数据可能挂在已停用的厂商上）
+     */
+    public List<ManufacturerOptionVO> options(String keyword, boolean includeDisabled) {
         LambdaQueryWrapper<Manufacturer> w = Wrappers.<Manufacturer>lambdaQuery()
-                .eq(Manufacturer::getStatus, STATUS_ENABLED)
                 .orderByAsc(Manufacturer::getName)
                 .last("LIMIT 200");
+        if (!includeDisabled) {
+            w.eq(Manufacturer::getStatus, STATUS_ENABLED);
+        }
         if (StringUtils.hasText(keyword)) {
             w.like(Manufacturer::getName, keyword.trim());
         }
