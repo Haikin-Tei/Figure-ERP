@@ -10,10 +10,8 @@ import com.figureerp.module.stock.converter.WarehouseConverter;
 import com.figureerp.module.stock.converter.WarehouseStatus;
 import com.figureerp.module.stock.dto.WarehouseQuery;
 import com.figureerp.module.stock.dto.WarehouseSaveRequest;
-import com.figureerp.module.stock.entity.Area;
 import com.figureerp.module.stock.entity.Shelf;
 import com.figureerp.module.stock.entity.Warehouse;
-import com.figureerp.module.stock.mapper.AreaMapper;
 import com.figureerp.module.stock.mapper.ShelfMapper;
 import com.figureerp.module.stock.mapper.WarehouseMapper;
 import com.figureerp.module.stock.vo.WarehouseVO;
@@ -41,7 +39,6 @@ public class WarehouseService {
 
     private final WarehouseMapper mapper;
     private final ShelfMapper shelfMapper;
-    private final AreaMapper areaMapper;
     private final CurrentUserService currentUserService;
 
     /* ================= 查询 ================= */
@@ -111,14 +108,6 @@ public class WarehouseService {
         if (shelfCount != null && shelfCount > 0) {
             throw new BusinessException(ResultCode.BUSINESS_ERROR,
                     "仓库「" + existing.getWarehouseName() + "」下还有 " + shelfCount + " 个货架，请先删除货架");
-        }
-
-        // 仓库下还有区域时同样不允许删，否则区域会指向一个查不到的仓库
-        Long areaCount = areaMapper.selectCount(Wrappers.<Area>lambdaQuery()
-                .eq(Area::getWarehouseId, id));
-        if (areaCount != null && areaCount > 0) {
-            throw new BusinessException(ResultCode.BUSINESS_ERROR,
-                    "仓库「" + existing.getWarehouseName() + "」下还有 " + areaCount + " 个区域，请先删除区域");
         }
 
         mapper.deleteById(id);

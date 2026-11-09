@@ -33,10 +33,6 @@ public class InboundOrder extends BaseEntity {
 
     // 下面几个字段可空，编辑时用户可能把它们清空，
     // MyBatis-Plus 默认忽略 null（NOT_NULL 策略），这里改成 ALWAYS，null 才会真正写回库里
-    /** 入库区域 area.id，可空；填写时须与 warehouseId 同仓库 */
-    @TableField(updateStrategy = FieldStrategy.ALWAYS)
-    private Long areaId;
-
     /** 入库货架 shelf.id，可空；填写时须与 warehouseId 同仓库 */
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private Long shelfId;

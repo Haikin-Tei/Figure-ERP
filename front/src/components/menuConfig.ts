@@ -37,8 +37,7 @@ export const menuData: MenuItem[] = [
         index: '1-3',
         children: [
           { title: '库位管理', index: '/stock/location'},
-          { title: '货架管理', index: '/stock/shelves' },
-          { title: '区域配置', index: '/stock/area' }
+          { title: '货架管理', index: '/stock/shelves' }
         ]
       }
     ]

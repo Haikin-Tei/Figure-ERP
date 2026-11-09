@@ -13,10 +13,6 @@ export interface Shelf {
   warehouseCode?: string
   /** 所属仓库名称，后端关联查出来的 */
   warehouseName?: string
-  /** 所属区域 ID，可空 */
-  areaId?: number | null
-  /** 所属区域名称，后端关联查出来的 */
-  areaName?: string | null
   /** 库位信息，如 01区-1层 */
   location?: string | null
   /** A 正常 / B 维护中 / D 停用 */
@@ -36,15 +32,12 @@ export interface ShelfQueryParams {
   /** 关键字，匹配货架编号或库位信息 */
   keyword?: string
   warehouseId?: number
-  areaId?: number
   status?: string
 }
 
 export interface ShelfSaveParams {
   shelfCode: string
   warehouseId: number
-  /** 所属区域，可空；填写时必须与 warehouseId 同一仓库 */
-  areaId?: number | null
   location?: string
   status: string
   remark?: string

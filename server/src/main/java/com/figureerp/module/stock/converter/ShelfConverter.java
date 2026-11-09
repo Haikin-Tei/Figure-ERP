@@ -1,6 +1,5 @@
 package com.figureerp.module.stock.converter;
 
-import com.figureerp.module.stock.entity.Area;
 import com.figureerp.module.stock.entity.Shelf;
 import com.figureerp.module.stock.entity.Warehouse;
 import com.figureerp.module.stock.vo.ShelfVO;
@@ -10,8 +9,8 @@ import java.util.Map;
 /**
  * 货架实体 → 出参。
  * <p>
- * 仓库、区域信息由调用方传进来（列表场景是批量查一次再拼，避免逐行查库）。
- * warehouse / area 为 null 说明被删了或本来没挂，此时只留 id，前端展示「-」。
+ * 仓库信息由调用方传进来（列表场景是批量查一次再拼，避免逐行查库）。
+ * warehouse 为 null 说明被删了，此时只留 id，前端展示「-」。
  */
 public final class ShelfConverter {
 
@@ -25,7 +24,7 @@ public final class ShelfConverter {
     private ShelfConverter() {
     }
 
-    public static ShelfVO toVO(Shelf s, Warehouse warehouse, Area area) {
+    public static ShelfVO toVO(Shelf s, Warehouse warehouse) {
         ShelfVO vo = new ShelfVO();
         vo.setId(s.getId());
         vo.setShelfCode(s.getShelfCode());
@@ -33,10 +32,6 @@ public final class ShelfConverter {
         if (warehouse != null) {
             vo.setWarehouseCode(warehouse.getWarehouseCode());
             vo.setWarehouseName(warehouse.getWarehouseName());
-        }
-        vo.setAreaId(s.getAreaId());
-        if (area != null) {
-            vo.setAreaName(area.getAreaName());
         }
         vo.setLocation(s.getLocation());
         vo.setStatus(s.getStatus());

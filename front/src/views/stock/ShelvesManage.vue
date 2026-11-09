@@ -32,18 +32,6 @@
           />
         </el-select>
 
-        <!-- 所属区域筛选（选项跟着仓库筛选走） -->
-        <el-select
-          v-model="filterAreaId"
-          placeholder="所属区域"
-          clearable
-          filterable
-          style="width: 180px"
-          @change="handleSearch"
-        >
-          <el-option v-for="a in filterAreaOptions" :key="a.id" :label="a.areaName" :value="a.id" />
-        </el-select>
-
         <!-- 状态筛选 -->
         <el-select v-model="filterStatus" placeholder="货架状态" clearable style="width: 150px" @change="handleSearch">
           <el-option label="正常" value="A" />
@@ -97,11 +85,6 @@
         <span class="warehouse-name">{{ scope.row.warehouseName || '仓库已删除' }}</span>
       </template>
 
-      <template #area="scope">
-        <el-tag v-if="scope.row.areaName" type="warning" effect="plain">{{ scope.row.areaName }}</el-tag>
-        <span v-else class="text-muted">未分区</span>
-      </template>
-
       <template #location="scope">
         <el-tag v-if="scope.row.location" type="info">{{ scope.row.location }}</el-tag>
         <span v-else>-</span>
@@ -141,19 +124,6 @@
           </el-select>
         </el-form-item>
 
-        <el-form-item label="所属区域" prop="areaId">
-          <el-select
-            v-model="form.areaId"
-            placeholder="可不选；先选仓库再选区域"
-            clearable
-            filterable
-            :disabled="!form.warehouseId"
-            style="width: 100%"
-          >
-            <el-option v-for="a in formAreaOptions" :key="a.id" :label="a.areaName" :value="a.id" />
-          </el-select>
-        </el-form-item>
-
         <el-form-item label="库位信息" prop="location">
           <el-input v-model="form.location" placeholder="例如：01区-1层" maxlength="100" />
         </el-form-item>
@@ -188,7 +158,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { Search, RefreshLeft, Plus } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import BaseTable from '@/components/common/BaseTable.vue'
@@ -202,7 +172,6 @@ import {
   type ShelfSaveParams
 } from '@/api/shelf'
 import { pageWarehousesApi, type Warehouse } from '@/api/warehouse'
-import { pageAreasApi, type Area } from '@/api/area'
 import { useUserStore } from '@/stores/user'
 import { canManageBusiness } from '@/utils/role'
 
@@ -224,30 +193,6 @@ async function fetchWarehouseOptions() {
   }
 }
 
-/* ---------------- 区域下拉（筛选与新增/编辑共用一份，按仓库过滤） ---------------- */
-const areaOptions = ref<Area[]>([])
-
-async function fetchAreaOptions() {
-  try {
-    const data = await pageAreasApi({ page: 1, size: 500 })
-    areaOptions.value = data.records
-  } catch {
-    areaOptions.value = []
-  }
-}
-
-/** 筛选栏的区域选项：选了仓库就只显示该仓库的区域 */
-const filterAreaOptions = computed(() =>
-  filterWarehouseId.value
-    ? areaOptions.value.filter((a) => a.warehouseId === filterWarehouseId.value)
-    : areaOptions.value
-)
-
-/** 表单里的区域选项：必须与所选仓库一致，否则后端会报「不属于所选仓库」 */
-const formAreaOptions = computed(() =>
-  form.warehouseId ? areaOptions.value.filter((a) => a.warehouseId === form.warehouseId) : []
-)
-
 /* ---------------- 列表（服务端分页） ---------------- */
 const loading = ref(false)
 const list = ref<Shelf[]>([])
@@ -256,7 +201,6 @@ const total = ref(0)
 const query = reactive({ page: 1, size: 10 })
 const filterKeyword = ref('')
 const filterWarehouseId = ref<number | undefined>(undefined)
-const filterAreaId = ref<number | undefined>(undefined)
 const filterStatus = ref('')
 
 async function fetchList() {
@@ -267,7 +211,6 @@ async function fetchList() {
       size: query.size,
       keyword: filterKeyword.value.trim() || undefined,
       warehouseId: filterWarehouseId.value || undefined,
-      areaId: filterAreaId.value || undefined,
       status: filterStatus.value || undefined
     })
     list.value = data.records
@@ -283,7 +226,6 @@ async function fetchList() {
 const columns = ref<Column[]>([
   { prop: 'shelfCode', label: '货架编号', width: 140, align: 'center' },
   { prop: 'warehouse', label: '所属仓库', minWidth: 190 },
-  { prop: 'area', label: '所属区域', minWidth: 150 },
   { prop: 'location', label: '库位信息', minWidth: 160 },
   { prop: 'status', label: '当前状态', width: 120, align: 'center' },
   {
@@ -311,7 +253,6 @@ const handleSearch = () => {
 const handleReset = () => {
   filterKeyword.value = ''
   filterWarehouseId.value = undefined
-  filterAreaId.value = undefined
   filterStatus.value = ''
   query.page = 1
   fetchList()
@@ -327,7 +268,6 @@ const handlePaginationChange = ({ page, limit }: { page: number; limit: number }
 interface ShelfForm {
   shelfCode: string
   warehouseId: number | undefined
-  areaId: number | undefined
   location: string
   status: string
   remark: string
@@ -342,7 +282,6 @@ const saving = ref(false)
 const form = reactive<ShelfForm>({
   shelfCode: '',
   warehouseId: undefined,
-  areaId: undefined,
   location: '',
   status: 'A',
   remark: ''
@@ -360,9 +299,8 @@ const handleAdd = () => {
   editingId.value = null
   Object.assign(form, {
     shelfCode: '',
-    // 默认带上当前筛选的仓库/区域，连续录入同一区域的货架时少点一次
+    // 默认带上当前筛选的仓库，连续录入同一仓库的货架时少点一次
     warehouseId: filterWarehouseId.value,
-    areaId: filterAreaId.value,
     location: '',
     status: 'A',
     remark: ''
@@ -376,7 +314,6 @@ const handleEdit = (row: Shelf) => {
   Object.assign(form, {
     shelfCode: row.shelfCode,
     warehouseId: row.warehouseId,
-    areaId: row.areaId ?? undefined,
     location: row.location ?? '',
     status: row.status,
     remark: row.remark ?? ''
@@ -393,7 +330,6 @@ const handleSave = async () => {
   const payload: ShelfSaveParams = {
     shelfCode: form.shelfCode.trim(),
     warehouseId: form.warehouseId,
-    areaId: form.areaId ?? null,
     location: form.location.trim() || undefined,
     status: form.status || 'A',
     remark: form.remark.trim() || undefined
@@ -455,30 +391,8 @@ const getStatusTag = (status?: string) => {
   return ''
 }
 
-/* ---------------- 仓库联动 ----------------
- * 仓库一改，原来选的区域可能属于旧仓库，直接清掉，避免提交时报「不属于所选仓库」。
- * 筛选栏同理：清掉区域筛选，否则会查出空列表。 */
-watch(filterWarehouseId, (id, oldId) => {
-  if (oldId !== undefined && filterAreaId.value) {
-    const stillValid = areaOptions.value.some(
-      (a) => a.id === filterAreaId.value && a.warehouseId === id
-    )
-    if (!stillValid) filterAreaId.value = undefined
-  }
-})
-
-watch(
-  () => form.warehouseId,
-  (id, oldId) => {
-    if (oldId === undefined || form.areaId === undefined) return
-    const stillValid = areaOptions.value.some((a) => a.id === form.areaId && a.warehouseId === id)
-    if (!stillValid) form.areaId = undefined
-  }
-)
-
 onMounted(async () => {
   await fetchWarehouseOptions()
-  await fetchAreaOptions()
   await fetchList()
 })
 </script>

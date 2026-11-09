@@ -2,10 +2,8 @@ package com.figureerp.module.stock;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.figureerp.module.stock.converter.ShelfStatus;
-import com.figureerp.module.stock.entity.Area;
 import com.figureerp.module.stock.entity.Shelf;
 import com.figureerp.module.stock.entity.Warehouse;
-import com.figureerp.module.stock.mapper.AreaMapper;
 import com.figureerp.module.stock.mapper.ShelfMapper;
 import com.figureerp.module.stock.mapper.WarehouseMapper;
 import lombok.RequiredArgsConstructor;
@@ -25,9 +23,6 @@ import java.util.List;
  * 只在货架表为空时执行；已有数据不会被覆盖，页面上改过/删过的数据也不会因重启还原。
  * 依赖仓库已初始化：按仓库代码找 warehouse_id，找不到对应仓库的种子直接跳过，
  * 避免出现指向不存在仓库的脏数据。
- * <p>
- * {@code @Order(20)}：排在 {@link AreaDataInitializer}（10）之后，这样能按仓库 + 区域编号
- * 找到刚建好的区域，把货架挂到对应的区域下；找不到区域时 area_id 留空，不影响货架本身。
  */
 @Slf4j
 @Component
@@ -38,7 +33,6 @@ public class ShelfDataInitializer implements ApplicationRunner {
 
     private final ShelfMapper shelfMapper;
     private final WarehouseMapper warehouseMapper;
-    private final AreaMapper areaMapper;
 
     private record Seed(String warehouseCode, String shelfCode, String location, String status, String remark) {}
 
@@ -71,12 +65,6 @@ public class ShelfDataInitializer implements ApplicationRunner {
                 Shelf shelf = new Shelf();
                 shelf.setShelfCode(s.shelfCode());
                 shelf.setWarehouseId(w.getId());
-                // 同一仓库下的 A 区（区域初始化的第一条），没有就留空
-                Area area = areaMapper.selectOne(Wrappers.<Area>lambdaQuery()
-                        .eq(Area::getWarehouseId, w.getId())
-                        .eq(Area::getAreaCode, "A")
-                        .last("LIMIT 1"));
-                shelf.setAreaId(area == null ? null : area.getId());
                 shelf.setLocation(s.location());
                 shelf.setStatus(s.status());
                 shelf.setRemark(s.remark());

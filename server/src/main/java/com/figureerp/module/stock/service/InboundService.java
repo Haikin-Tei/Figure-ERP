@@ -1,7 +1,6 @@
 package com.figureerp.module.stock.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.figureerp.common.exception.BusinessException;
@@ -15,12 +14,10 @@ import com.figureerp.module.stock.converter.InboundType;
 import com.figureerp.module.stock.dto.InboundItemRequest;
 import com.figureerp.module.stock.dto.InboundQuery;
 import com.figureerp.module.stock.dto.InboundSaveRequest;
-import com.figureerp.module.stock.entity.Area;
 import com.figureerp.module.stock.entity.InboundItem;
 import com.figureerp.module.stock.entity.InboundOrder;
 import com.figureerp.module.stock.entity.Shelf;
 import com.figureerp.module.stock.entity.Warehouse;
-import com.figureerp.module.stock.mapper.AreaMapper;
 import com.figureerp.module.stock.mapper.InboundItemMapper;
 import com.figureerp.module.stock.mapper.InboundOrderMapper;
 import com.figureerp.module.stock.mapper.ShelfMapper;
@@ -63,7 +60,7 @@ import java.util.stream.Collectors;
  *   <li>只有「待入库」状态可以编辑和删除；已入库只能作废；已作废不能再确认；</li>
  *   <li>查询所有登录用户可用，增删改 / 确认 / 作废需要管理员或主管。</li>
  * </ul>
- * 注意：目前还没有 stock 库存表，确认入库只改单据状态，不累加库存；等库存表落地后再在此处补扣加逻辑。
+ * 与库存的联动：确认入库时按明细累加 {@code stock}，已入库单作废时按明细回退（见 {@link StockService}）。
  */
 @Slf4j
 @Service
@@ -75,10 +72,10 @@ public class InboundService {
     private final InboundOrderMapper orderMapper;
     private final InboundItemMapper itemMapper;
     private final WarehouseMapper warehouseMapper;
-    private final AreaMapper areaMapper;
     private final ShelfMapper shelfMapper;
     private final FigureProductMapper productMapper;
     private final CurrentUserService currentUserService;
+    private final StockService stockService;
 
     /* ================= 查询 ================= */
 
@@ -119,15 +116,13 @@ public class InboundService {
 
         Map<Long, List<InboundItem>> itemsByOrder = loadItems(records);
         Map<Long, Warehouse> warehouses = loadWarehouses(records);
-        Map<Long, Area> areas = loadAreas(records);
         Map<Long, Shelf> shelves = loadShelves(records);
 
-        // 注意：区域 / 货架可空，必须先判 null 再查。
+        // 注意：货架可空，必须先判 null 再查。
         // Map.of() 是不可变集合，拿 null 当 key 去 get 会直接抛 NPE（不是返回 null），
-        // 一页单据都没填区域时就会踩到。
+        // 一页单据都没填货架时就会踩到。
         return PageResult.of(page, o -> InboundConverter.toVO(o,
                 warehouses.get(o.getWarehouseId()),
-                o.getAreaId() == null ? null : areas.get(o.getAreaId()),
                 o.getShelfId() == null ? null : shelves.get(o.getShelfId()),
                 itemsByOrder.getOrDefault(o.getId(), List.of()),
                 false));
@@ -138,7 +133,6 @@ public class InboundService {
         List<InboundItem> items = listItems(id);
         return InboundConverter.toVO(order,
                 warehouseMapper.selectById(order.getWarehouseId()),
-                order.getAreaId() == null ? null : areaMapper.selectById(order.getAreaId()),
                 order.getShelfId() == null ? null : shelfMapper.selectById(order.getShelfId()),
                 items, true);
     }
@@ -177,7 +171,6 @@ public class InboundService {
         SysUser user = currentUserService.requireManager("维护入库记录");
 
         requireWarehouse(req.getWarehouseId());
-        requireArea(req.getAreaId(), req.getWarehouseId());
         requireShelf(req.getShelfId(), req.getWarehouseId());
 
         List<InboundItem> items = buildItems(req.getItems());
@@ -190,7 +183,6 @@ public class InboundService {
         order.setInboundNo(inboundNo);
         order.setInboundType(StringUtils.hasText(req.getInboundType()) ? req.getInboundType() : InboundType.PURCHASE);
         order.setWarehouseId(req.getWarehouseId());
-        order.setAreaId(req.getAreaId());
         order.setShelfId(req.getShelfId());
         order.setSupplier(trimToNull(req.getSupplier()));
         order.setStatus(InboundStatus.DRAFT);
@@ -218,7 +210,6 @@ public class InboundService {
         requireDraft(existing, "编辑");
 
         requireWarehouse(req.getWarehouseId());
-        requireArea(req.getAreaId(), req.getWarehouseId());
         requireShelf(req.getShelfId(), req.getWarehouseId());
 
         List<InboundItem> items = buildItems(req.getItems());
@@ -232,7 +223,6 @@ public class InboundService {
         order.setInboundNo(inboundNo);
         order.setInboundType(StringUtils.hasText(req.getInboundType()) ? req.getInboundType() : InboundType.PURCHASE);
         order.setWarehouseId(req.getWarehouseId());
-        order.setAreaId(req.getAreaId());
         order.setShelfId(req.getShelfId());
         order.setSupplier(trimToNull(req.getSupplier()));
         order.setInboundTime(req.getInboundTime() == null
@@ -274,22 +264,28 @@ public class InboundService {
             throw new BusinessException(ResultCode.BUSINESS_ERROR,
                     "只有「待入库」的单据可以确认，当前状态：" + InboundStatus.labelOf(existing.getStatus()));
         }
-        if (listItems(id).isEmpty()) {
+        List<InboundItem> items = listItems(id);
+        if (items.isEmpty()) {
             throw new BusinessException(ResultCode.BUSINESS_ERROR, "该入库单没有手办明细，不能确认入库");
         }
 
-        // 只 set 状态这一列，不要用空实体 updateById：
+        // 确认时若还没填入库时间，用当前时间补上，保证「本月入库」统计和库存的最近入库时间能算到
+        LocalDateTime inboundTime = existing.getInboundTime() == null
+                ? LocalDateTime.now().withNano(0)
+                : existing.getInboundTime();
+
+        // 只 set 状态和时间这两列，不要用空实体 updateById：
         // 供应商 / 区域 / 货架 / 备注标了 FieldStrategy.ALWAYS，空实体更新会把它们一起写成 NULL，
         // 等于确认入库时把单据信息抹掉（这个坑踩过一次）。
-        LambdaUpdateWrapper<InboundOrder> w = Wrappers.<InboundOrder>lambdaUpdate()
+        orderMapper.update(null, Wrappers.<InboundOrder>lambdaUpdate()
                 .eq(InboundOrder::getId, id)
-                .set(InboundOrder::getStatus, InboundStatus.CONFIRMED);
-        // 确认时若还没填入库时间，用当前时间补上，保证「本月入库」统计能算到
-        if (existing.getInboundTime() == null) {
-            w.set(InboundOrder::getInboundTime, LocalDateTime.now().withNano(0));
-        }
-        orderMapper.update(null, w);
-        log.info("确认入库: id={} no={}", id, existing.getInboundNo());
+                .set(InboundOrder::getStatus, InboundStatus.CONFIRMED)
+                .set(InboundOrder::getInboundTime, inboundTime));
+
+        // 累加库存：同一事务内，库存写失败则单据状态一起回滚
+        existing.setInboundTime(inboundTime);
+        stockService.applyInbound(existing, items);
+        log.info("确认入库: id={} no={} 累加库存明细={} 件", id, existing.getInboundNo(), items.size());
     }
 
     /** 待入库 / 已入库 → 已作废 */
@@ -301,11 +297,19 @@ public class InboundService {
             throw new BusinessException(ResultCode.BUSINESS_ERROR, "该入库单已经作废，无需重复操作");
         }
 
+        String before = existing.getStatus();
+
         // 同上：只改状态列，避免把其他可空字段顺手清成 NULL
         orderMapper.update(null, Wrappers.<InboundOrder>lambdaUpdate()
                 .eq(InboundOrder::getId, id)
                 .set(InboundOrder::getStatus, InboundStatus.CANCELLED));
-        log.info("作废入库单: id={} no={}", id, existing.getInboundNo());
+
+        // 只有「已入库」的单据加过库存，作废时要把这部分退回去；
+        // 待入库的草稿从没加过库存，直接改状态即可
+        if (InboundStatus.CONFIRMED.equals(before)) {
+            stockService.revertInbound(existing, listItems(id));
+        }
+        log.info("作废入库单: id={} no={} 原状态={}", id, existing.getInboundNo(), before);
     }
 
     /** 字典：入库类型 + 状态，供前端下拉框使用 */
@@ -443,16 +447,6 @@ public class InboundService {
                 .collect(Collectors.toMap(Warehouse::getId, Function.identity()));
     }
 
-    private Map<Long, Area> loadAreas(List<InboundOrder> orders) {
-        Set<Long> ids = orders.stream().map(InboundOrder::getAreaId)
-                .filter(Objects::nonNull).collect(Collectors.toCollection(HashSet::new));
-        if (ids.isEmpty()) {
-            return Map.of();
-        }
-        return areaMapper.selectBatchIds(ids).stream()
-                .collect(Collectors.toMap(Area::getId, Function.identity()));
-    }
-
     private Map<Long, Shelf> loadShelves(List<InboundOrder> orders) {
         Set<Long> ids = orders.stream().map(InboundOrder::getShelfId)
                 .filter(Objects::nonNull).collect(Collectors.toCollection(HashSet::new));
@@ -491,20 +485,6 @@ public class InboundService {
     private void requireWarehouse(Long warehouseId) {
         if (warehouseMapper.selectById(warehouseId) == null) {
             throw new BusinessException(ResultCode.DATA_NOT_FOUND, "入库仓库不存在或已被删除");
-        }
-    }
-
-    /** 区域可空；填了就必须存在且与仓库一致，否则单据会指到一个查不到的 / 别的仓库的区域 */
-    private void requireArea(Long areaId, Long warehouseId) {
-        if (areaId == null) {
-            return;
-        }
-        Area area = areaMapper.selectById(areaId);
-        if (area == null) {
-            throw new BusinessException(ResultCode.DATA_NOT_FOUND, "入库区域不存在或已被删除");
-        }
-        if (!Objects.equals(area.getWarehouseId(), warehouseId)) {
-            throw new BusinessException(ResultCode.PARAM_INVALID, "所选区域不属于该仓库，请重新选择");
         }
     }
 

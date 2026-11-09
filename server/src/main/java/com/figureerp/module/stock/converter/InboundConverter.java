@@ -1,6 +1,5 @@
 package com.figureerp.module.stock.converter;
 
-import com.figureerp.module.stock.entity.Area;
 import com.figureerp.module.stock.entity.InboundItem;
 import com.figureerp.module.stock.entity.InboundOrder;
 import com.figureerp.module.stock.entity.Shelf;
@@ -13,7 +12,7 @@ import java.util.List;
 /**
  * 入库单实体 → 出参。
  * <p>
- * 仓库 / 区域 / 货架的名称与明细由调用方批量查好传进来（列表场景一次查一页，避免逐行查库）。
+ * 仓库 / 货架的名称与明细由调用方批量查好传进来（列表场景一次查一页，避免逐行查库）。
  * 关联对象为 null 说明主数据已被删，此时只留 id，前端展示「-」。
  */
 public final class InboundConverter {
@@ -24,7 +23,7 @@ public final class InboundConverter {
     /**
      * @param withItems 是否带上明细。列表接口传 false 只给汇总，详情接口传 true
      */
-    public static InboundOrderVO toVO(InboundOrder o, Warehouse warehouse, Area area, Shelf shelf,
+    public static InboundOrderVO toVO(InboundOrder o, Warehouse warehouse, Shelf shelf,
                                       List<InboundItem> items, boolean withItems) {
         InboundOrderVO vo = new InboundOrderVO();
         vo.setId(o.getId());
@@ -35,10 +34,6 @@ public final class InboundConverter {
         if (warehouse != null) {
             vo.setWarehouseCode(warehouse.getWarehouseCode());
             vo.setWarehouseName(warehouse.getWarehouseName());
-        }
-        vo.setAreaId(o.getAreaId());
-        if (area != null) {
-            vo.setAreaName(area.getAreaName());
         }
         vo.setShelfId(o.getShelfId());
         if (shelf != null) {

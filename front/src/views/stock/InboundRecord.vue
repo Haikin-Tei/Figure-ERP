@@ -146,7 +146,7 @@
         <div class="warehouse-cell">
           <span class="warehouse-name">{{ scope.row.warehouseName || '仓库已删除' }}</span>
           <span class="warehouse-sub">
-            {{ scope.row.areaName || '未指定区域' }} / {{ scope.row.shelfCode || '未指定货架' }}
+            {{ scope.row.shelfCode || '未指定货架' }}
           </span>
         </div>
       </template>
@@ -233,7 +233,7 @@
         </el-row>
 
         <el-row :gutter="16">
-          <el-col :span="8">
+          <el-col :span="12">
             <el-form-item label="入库仓库" prop="warehouseId">
               <el-select
                 v-model="form.warehouseId"
@@ -251,21 +251,7 @@
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col :span="8">
-            <el-form-item label="入库区域">
-              <el-select
-                v-model="form.areaId"
-                placeholder="可不选"
-                clearable
-                filterable
-                :disabled="!form.warehouseId"
-                style="width: 100%"
-              >
-                <el-option v-for="a in areaOptions" :key="a.id" :label="a.areaName" :value="a.id" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="8">
+          <el-col :span="12">
             <el-form-item label="入库货架">
               <el-select
                 v-model="form.shelfId"
@@ -405,8 +391,8 @@
               {{ detail.warehouseName || '仓库已删除' }}
               <span v-if="detail.warehouseCode" class="muted">({{ detail.warehouseCode }})</span>
             </el-descriptions-item>
-            <el-descriptions-item label="区域 / 货架">
-              {{ detail.areaName || '未指定区域' }} / {{ detail.shelfCode || '未指定货架' }}
+            <el-descriptions-item label="入库货架">
+              {{ detail.shelfCode || '未指定货架' }}
             </el-descriptions-item>
             <el-descriptions-item label="供应商">{{ detail.supplier || '-' }}</el-descriptions-item>
             <el-descriptions-item label="经办人">{{ detail.operator || '-' }}</el-descriptions-item>
@@ -467,7 +453,6 @@ import {
   type InboundSummary
 } from '@/api/inbound'
 import { pageWarehousesApi, type Warehouse } from '@/api/warehouse'
-import { pageAreasApi, type Area } from '@/api/area'
 import { pageShelvesApi, type Shelf } from '@/api/shelf'
 import { pageProductsApi, type FigureProduct } from '@/api/product'
 import { useUserStore } from '@/stores/user'
@@ -528,27 +513,21 @@ function nowText() {
 
 /* ---------------- 下拉选项 ---------------- */
 const warehouseOptions = ref<Warehouse[]>([])
-const areaOptionsAll = ref<Area[]>([])
 const shelfOptionsAll = ref<Shelf[]>([])
 const productOptions = ref<FigureProduct[]>([])
 
-const areaOptions = computed(() =>
-  areaOptionsAll.value.filter((a) => !form.warehouseId || a.warehouseId === form.warehouseId)
-)
 const shelfOptions = computed(() =>
   shelfOptionsAll.value.filter((s) => !form.warehouseId || s.warehouseId === form.warehouseId)
 )
 
 async function fetchOptions() {
   // 这几个都是主数据，量不大，一次取回来做下拉；筛选和表单共用同一份
-  const [warehouses, areas, shelves, products] = await Promise.all([
+  const [warehouses, shelves, products] = await Promise.all([
     pageWarehousesApi({ page: 1, size: 200 }).catch(() => null),
-    pageAreasApi({ page: 1, size: 500 }).catch(() => null),
     pageShelvesApi({ page: 1, size: 500 }).catch(() => null),
     pageProductsApi({ page: 1, size: 500 }).catch(() => null)
   ])
   warehouseOptions.value = warehouses?.records ?? []
-  areaOptionsAll.value = areas?.records ?? []
   shelfOptionsAll.value = shelves?.records ?? []
   productOptions.value = products?.records ?? []
 }
@@ -587,7 +566,7 @@ const columns = ref<Column[]>([
   { prop: 'status', label: '状态', width: 95, align: 'center' },
   { prop: 'productSummary', label: '手办', minWidth: 190 },
   { prop: 'totalQuantity', label: '数量 / 金额', width: 135, align: 'right' },
-  { prop: 'warehouse', label: '仓库 / 区域 / 货架', minWidth: 170 },
+  { prop: 'warehouse', label: '仓库 / 货架', minWidth: 170 },
   { prop: 'supplier', label: '供应商', minWidth: 130 },
   { prop: 'action', label: '操作', width: 150, align: 'center', fixed: 'right' }
 ])
@@ -649,7 +628,6 @@ interface InboundForm {
   inboundNo: string
   inboundType: string
   warehouseId: number | undefined
-  areaId: number | null
   shelfId: number | null
   supplier: string
   inboundTime: string
@@ -668,7 +646,6 @@ const form = reactive<InboundForm>({
   inboundNo: '',
   inboundType: 'P',
   warehouseId: undefined,
-  areaId: null,
   shelfId: null,
   supplier: '',
   inboundTime: '',
@@ -690,7 +667,6 @@ function resetForm() {
     inboundType: 'P',
     // 默认带上当前筛选的仓库，连续录入同一个仓库时少点一次
     warehouseId: filterWarehouseId.value,
-    areaId: null,
     shelfId: null,
     supplier: '',
     inboundTime: nowText(),
@@ -716,7 +692,6 @@ const handleEdit = async (row: InboundOrder) => {
       inboundNo: data.inboundNo,
       inboundType: data.inboundType,
       warehouseId: data.warehouseId,
-      areaId: data.areaId ?? null,
       shelfId: data.shelfId ?? null,
       supplier: data.supplier ?? '',
       // 后端返回的 ISO 时间去掉 T，和日期选择器的格式对齐
@@ -737,11 +712,8 @@ const handleEdit = async (row: InboundOrder) => {
   }
 }
 
-/** 换仓库时清掉不属于新仓库的区域 / 货架，避免提交后被后端打回 */
+/** 换仓库时清掉不属于新仓库的货架，避免提交后被后端打回 */
 function handleWarehouseChange() {
-  if (form.areaId && !areaOptions.value.some((a) => a.id === form.areaId)) {
-    form.areaId = null
-  }
   if (form.shelfId && !shelfOptions.value.some((s) => s.id === form.shelfId)) {
     form.shelfId = null
   }
@@ -804,7 +776,6 @@ const handleSave = async () => {
     inboundNo: form.inboundNo.trim() || undefined,
     inboundType: form.inboundType,
     warehouseId: form.warehouseId,
-    areaId: form.areaId || null,
     shelfId: form.shelfId || null,
     supplier: form.supplier.trim() || undefined,
     // 日期选择器给的是「2026-11-07 10:30:00」，后端按 ISO-8601 解析，提交前把空格换成 T
@@ -831,7 +802,7 @@ const handleSave = async () => {
     formVisible.value = false
     await Promise.all([fetchList(), fetchSummary()])
   } catch {
-    // 请求层已提示（如单号重复、区域不属于该仓库）
+    // 请求层已提示（如单号重复、货架不属于该仓库）
   } finally {
     saving.value = false
   }

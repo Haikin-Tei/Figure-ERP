@@ -66,12 +66,6 @@ const routes = [
         name: 'LocationManage',
         component: () => import('@/views/stock/LocationManage/index.vue'),
         meta: { title: '库位管理', icon: 'Location' }
-      },
-      {
-        path: 'area',
-        name: 'AreaConfig',
-        component: () => import('@/views/stock/AreaConfig.vue'),
-        meta: { title: '区域配置', icon: 'OfficeBuilding' }
       }
     ]
   },

@@ -18,10 +18,12 @@ const CASES = [
   ['/stock/figure', ['库存管理', '手办列表']],
   ['/stock/location', ['库存管理', '仓库设置', '库位管理']],
   ['/stock/shelves', ['库存管理', '仓库设置', '货架管理']],
-  ['/stock/area', ['库存管理', '仓库设置', '区域配置']],
   ['/logistics/query', ['物流管理', '物流价格查询']],
   ['/order/list', ['订单管理', '所有订单']],
   ['/staff/maintain', ['员工权限管理', '员工维护']],
+  ['/staff/attendance', ['员工权限管理', '员工考勤记录']],
+  ['/staff/leave', ['员工权限管理', '员工请假申请']],
+  ['/staff/overtime', ['员工权限管理', '员工加班申请']],
   ['/system/logs', ['系统设置', '操作日志']],
   ['/acg/catalog', ['目录维护', '作品目录及维护']],
   ['/acg/supplier', ['目录维护', '供应商目录维护']],
@@ -118,6 +120,35 @@ const CASES = [
     await page.goto(`${BASE}/product/list`, { waitUntil: 'domcontentloaded' })
     await page.waitForSelector('.breadcrumb-bar', { timeout: 10000 })
     await page.screenshot({ path: '/tmp/shot-breadcrumb-2level.png' })
+
+    // 区域配置已下线：菜单里不该再有这一项，库位管理 / 货架管理要还在
+    await page.goto(`${BASE}/stock/location`, { waitUntil: 'domcontentloaded' })
+    await page.waitForSelector('.sidebar', { timeout: 10000 })
+    await page.waitForTimeout(400)
+    const sidebarText = await page.locator('.sidebar').innerText()
+    if (sidebarText.includes('区域配置')) {
+      failed++
+      console.error('✗ 侧边栏仍存在「区域配置」菜单')
+    } else {
+      console.log('✓ 侧边栏已无「区域配置」菜单')
+    }
+    if (sidebarText.includes('库位管理') && sidebarText.includes('货架管理')) {
+      console.log('✓ 仓库设置下仍保留「库位管理」「货架管理」')
+    } else {
+      failed++
+      console.error('✗ 仓库设置下的库位管理 / 货架管理菜单缺失')
+    }
+
+    // 直接访问旧地址应落到 404 页（路由已删除）
+    await page.goto(`${BASE}/stock/area`, { waitUntil: 'domcontentloaded' })
+    await page.waitForTimeout(600)
+    const areaPageText = await page.locator('body').innerText()
+    if (areaPageText.includes('区域编号') || areaPageText.includes('新增区域')) {
+      failed++
+      console.error('✗ /stock/area 仍渲染区域配置页面')
+    } else {
+      console.log('✓ /stock/area 已不再渲染区域配置页面')
+    }
   } catch (e) {
     failed++
     console.error('✗ 执行异常:', e.message)

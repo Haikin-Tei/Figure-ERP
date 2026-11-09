@@ -102,31 +102,39 @@ async function fillNumber(locator, value) {
 
     const rowSel = '.base-table .el-table__body tr'
     const rowCount0 = await page.locator(rowSel).count()
-    check(rowCount0 === 4, `列表加载到 4 条演示单据（实际 ${rowCount0}）`)
+    // 基线取接口总数：脚本自己会留作废单，写死条数会让第二次运行误报
+    const pageApi = await apiCall('GET', '/api/inbound/page?page=1&size=10', token)
+    const expectRows = Math.min(pageApi?.data?.total ?? 0, 10)
+    check(rowCount0 === expectRows, `列表条数与接口一致：${expectRows} 条（实际 ${rowCount0}）`)
 
     const tableText = await page.locator('.base-table').innerText()
     check(/RK\d{12}/.test(tableText), '列表显示入库单号')
-    check(tableText.includes('采购入库') && tableText.includes('已入库'), '列表显示类型与状态文案')
+    check(/采购入库|退货入库|调拨入库|其他入库/.test(tableText), '列表显示类型文案')
+    check(/已入库|待入库|已作废/.test(tableText), '列表显示状态文案')
     check(tableText.includes('上海库'), '列表显示仓库名称')
 
     // ---- 统计卡 ----
+    const sumApi = await apiCall('GET', '/api/inbound/summary', token)
+    const sum = sumApi?.data || {}
     const stat0 = await page.locator('.stat-card').nth(0).innerText()
     const stat1 = await page.locator('.stat-card').nth(1).innerText()
     const stat2 = await page.locator('.stat-card').nth(2).innerText()
-    check(stat0.includes('待入库单') && /\b1\b/.test(stat0), `统计卡：待入库 1 单（${stat0.replace(/\n/g, ' ')}）`)
-    check(stat1.includes('本月入库单') && /\b2\b/.test(stat1), `统计卡：本月入库 2 单（${stat1.replace(/\n/g, ' ')}）`)
-    check(stat2.includes('本月入库件数') && stat2.includes('27'), `统计卡：本月 27 件（${stat2.replace(/\n/g, ' ')}）`)
+    check(stat0.includes('待入库单') && stat0.includes(String(sum.pendingCount)), `统计卡：待入库 ${sum.pendingCount} 单（${stat0.replace(/\n/g, ' ')}）`)
+    check(stat1.includes('本月入库单') && stat1.includes(String(sum.monthOrderCount)), `统计卡：本月入库 ${sum.monthOrderCount} 单（${stat1.replace(/\n/g, ' ')}）`)
+    check(stat2.includes('本月入库件数') && stat2.includes(String(sum.monthQuantity)), `统计卡：本月 ${sum.monthQuantity} 件（${stat2.replace(/\n/g, ' ')}）`)
 
     // ---- 状态筛选 ----
     await pickOption(page, page.locator('.filter-bar .el-select').nth(2), '已入库')
     await page.waitForTimeout(900)
     const confirmedRows = await page.locator(rowSel).count()
-    check(confirmedRows === 3, `按状态筛选「已入库」得到 3 条（实际 ${confirmedRows}）`)
+    const confirmedApi = await apiCall('GET', '/api/inbound/page?page=1&size=10&status=C', token)
+    const expectConfirmed = Math.min(confirmedApi?.data?.total ?? 0, 10)
+    check(confirmedRows === expectConfirmed, `按状态筛选「已入库」得到 ${expectConfirmed} 条（实际 ${confirmedRows}）`)
 
     await page.click('.filter-bar button:has-text("重置")')
     await page.waitForTimeout(900)
     const resetRows = await page.locator(rowSel).count()
-    check(resetRows === 4, `重置后恢复 4 条（实际 ${resetRows}）`)
+    check(resetRows === expectRows, `重置后恢复 ${expectRows} 条（实际 ${resetRows}）`)
 
     // ---- 新增入库单 ----
     await page.click('.filter-bar button:has-text("新增入库单")')
@@ -135,10 +143,11 @@ async function fillNumber(locator, value) {
 
     const dialog = page.locator('.el-dialog').last()
     const formSelects = dialog.locator('.el-form .el-select')
-    // 0 入库类型 / 1 入库仓库 / 2 入库区域 / 3 入库货架
+    // 0 入库类型 / 1 入库仓库 / 2 入库货架（区域配置已下线，表单不再有区域）
     await pickOption(page, formSelects.nth(1), '上海库')
     await page.waitForTimeout(400)
-    await pickOption(page, formSelects.nth(2), 'A区')
+    const areaFieldCount = await dialog.locator('.el-form-item:has-text("入库区域")').count()
+    check(areaFieldCount === 0, `新增表单不再有「入库区域」字段（实际 ${areaFieldCount} 个）`)
     await page.fill('input[placeholder="如 Good Smile Company 中国代理"]', SUPPLIER)
     await page.fill('input[placeholder="选填"]', `${SUPPLIER} 备注`)
 
@@ -167,7 +176,7 @@ async function fillNumber(locator, value) {
     check(created?.status === 'D', '新增单据状态为待入库', created?.status)
     check(created?.totalQuantity === 5, `数量合计 = 5（实际 ${created?.totalQuantity}）`)
     check(Number(created?.totalAmount) === 400, `金额合计 = 400（实际 ${created?.totalAmount}）`)
-    check(created?.areaName?.includes('A区'), '区域关联成功', created?.areaName)
+    check(created?.warehouseName === '上海库' && created?.shelfId == null, '仓库关联成功、未选货架时货架为空', JSON.stringify([created?.warehouseName, created?.shelfId]))
 
     const detail = await apiCall('GET', `/api/inbound/${created.id}`, token)
     check(detail?.data?.items?.length === 2, '明细 2 行已落库')

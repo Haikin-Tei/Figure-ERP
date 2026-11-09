@@ -38,12 +38,6 @@ public class InboundOrderVO {
     @Schema(description = "入库仓库名称")
     private String warehouseName;
 
-    @Schema(description = "入库区域 ID")
-    private Long areaId;
-
-    @Schema(description = "入库区域名称")
-    private String areaName;
-
     @Schema(description = "入库货架 ID")
     private Long shelfId;
 

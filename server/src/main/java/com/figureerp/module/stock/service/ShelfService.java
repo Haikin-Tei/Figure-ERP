@@ -10,10 +10,8 @@ import com.figureerp.module.stock.converter.ShelfConverter;
 import com.figureerp.module.stock.converter.ShelfStatus;
 import com.figureerp.module.stock.dto.ShelfQuery;
 import com.figureerp.module.stock.dto.ShelfSaveRequest;
-import com.figureerp.module.stock.entity.Area;
 import com.figureerp.module.stock.entity.Shelf;
 import com.figureerp.module.stock.entity.Warehouse;
-import com.figureerp.module.stock.mapper.AreaMapper;
 import com.figureerp.module.stock.mapper.ShelfMapper;
 import com.figureerp.module.stock.mapper.WarehouseMapper;
 import com.figureerp.module.stock.vo.ShelfVO;
@@ -49,7 +47,6 @@ public class ShelfService {
 
     private final ShelfMapper mapper;
     private final WarehouseMapper warehouseMapper;
-    private final AreaMapper areaMapper;
     private final CurrentUserService currentUserService;
 
     /* ================= 查询 ================= */
@@ -65,9 +62,6 @@ public class ShelfService {
         if (q.getWarehouseId() != null) {
             w.eq(Shelf::getWarehouseId, q.getWarehouseId());
         }
-        if (q.getAreaId() != null) {
-            w.eq(Shelf::getAreaId, q.getAreaId());
-        }
         if (StringUtils.hasText(q.getStatus())) {
             w.eq(Shelf::getStatus, q.getStatus());
         }
@@ -77,21 +71,14 @@ public class ShelfService {
 
         Page<Shelf> page = mapper.selectPage(new Page<>(q.getPage(), q.getSize()), w);
 
-        // 一次把这页涉及的仓库、区域批量查出来拼装，避免逐行查库
+        // 一次把这页涉及的仓库批量查出来拼装，避免逐行查库
         Map<Long, Warehouse> warehouses = loadWarehouses(page.getRecords());
-        Map<Long, Area> areas = loadAreas(page.getRecords());
-        // 注意不能直接 areas.get(s.getAreaId())：没有区域时 loadAreas 返回 Map.of()，
-        // 不可变 Map 用 null 作 key 查会抛 NPE（货架本来就可以不挂区域）
-        return PageResult.of(page, s -> {
-            Area area = s.getAreaId() == null ? null : areas.get(s.getAreaId());
-            return ShelfConverter.toVO(s, warehouses.get(s.getWarehouseId()), area);
-        });
+        return PageResult.of(page, s -> ShelfConverter.toVO(s, warehouses.get(s.getWarehouseId())));
     }
 
     public ShelfVO detail(Long id) {
         Shelf shelf = getExisting(id);
-        Area area = shelf.getAreaId() == null ? null : areaMapper.selectById(shelf.getAreaId());
-        return ShelfConverter.toVO(shelf, warehouseMapper.selectById(shelf.getWarehouseId()), area);
+        return ShelfConverter.toVO(shelf, warehouseMapper.selectById(shelf.getWarehouseId()));
     }
 
     /* ================= 维护 ================= */
@@ -100,7 +87,6 @@ public class ShelfService {
     public Long create(ShelfSaveRequest req) {
         currentUserService.requireManager("维护货架");
         requireWarehouse(req.getWarehouseId());
-        requireArea(req.getAreaId(), req.getWarehouseId());
         checkCodeUnique(req.getWarehouseId(), req.getShelfCode(), null);
 
         Shelf shelf = new Shelf();
@@ -115,7 +101,6 @@ public class ShelfService {
         currentUserService.requireManager("维护货架");
         Shelf existing = getExisting(id);
         requireWarehouse(req.getWarehouseId());
-        requireArea(req.getAreaId(), req.getWarehouseId());
         checkCodeUnique(req.getWarehouseId(), req.getShelfCode(), id);
 
         Shelf shelf = new Shelf();
@@ -157,7 +142,6 @@ public class ShelfService {
     private void apply(Shelf s, ShelfSaveRequest req, Shelf existing) {
         s.setShelfCode(req.getShelfCode().trim());
         s.setWarehouseId(req.getWarehouseId());
-        s.setAreaId(req.getAreaId());
         s.setLocation(blankToNull(req.getLocation()));
         s.setStatus(StringUtils.hasText(req.getStatus()) ? req.getStatus() : ShelfStatus.NORMAL);
         s.setRemark(blankToNull(req.getRemark()));
@@ -177,20 +161,6 @@ public class ShelfService {
             throw new BusinessException(ResultCode.DATA_NOT_FOUND, "所属仓库不存在或已被删除");
         }
         return w;
-    }
-
-    /** 区域可空；填了就必须存在，且必须与货架属于同一仓库，避免「3101 的货架挂在 3301 的区域下」 */
-    private void requireArea(Long areaId, Long warehouseId) {
-        if (areaId == null) {
-            return;
-        }
-        Area area = areaMapper.selectById(areaId);
-        if (area == null) {
-            throw new BusinessException(ResultCode.DATA_NOT_FOUND, "所属区域不存在或已被删除");
-        }
-        if (!area.getWarehouseId().equals(warehouseId)) {
-            throw new BusinessException(ResultCode.PARAM_INVALID, "所属区域不属于所选仓库，请重新选择");
-        }
     }
 
     /** 同一仓库的未删除记录中货架编号不能重复（表上没建 UNIQUE，见 schema.sql 的说明） */
@@ -214,18 +184,6 @@ public class ShelfService {
             throw new BusinessException(ResultCode.DATA_NOT_FOUND, "货架不存在或已被删除");
         }
         return shelf;
-    }
-
-    private Map<Long, Area> loadAreas(List<Shelf> shelves) {
-        Set<Long> ids = shelves.stream()
-                .map(Shelf::getAreaId)
-                .filter(java.util.Objects::nonNull)
-                .collect(Collectors.toCollection(HashSet::new));
-        if (ids.isEmpty()) {
-            return Map.of();
-        }
-        return areaMapper.selectBatchIds(ids).stream()
-                .collect(Collectors.toMap(Area::getId, Function.identity()));
     }
 
     private Map<Long, Warehouse> loadWarehouses(List<Shelf> shelves) {

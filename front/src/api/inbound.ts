@@ -32,8 +32,6 @@ export interface InboundOrder {
   warehouseId: number
   warehouseCode?: string
   warehouseName?: string
-  areaId?: number | null
-  areaName?: string | null
   shelfId?: number | null
   shelfCode?: string | null
   supplier?: string | null
@@ -80,7 +78,6 @@ export interface InboundSaveParams {
   inboundNo?: string
   inboundType: string
   warehouseId: number
-  areaId?: number | null
   shelfId?: number | null
   supplier?: string
   /** yyyy-MM-dd HH:mm:ss */

@@ -5,12 +5,10 @@ import com.figureerp.module.product.entity.FigureProduct;
 import com.figureerp.module.product.mapper.FigureProductMapper;
 import com.figureerp.module.stock.converter.InboundStatus;
 import com.figureerp.module.stock.converter.InboundType;
-import com.figureerp.module.stock.entity.Area;
 import com.figureerp.module.stock.entity.InboundItem;
 import com.figureerp.module.stock.entity.InboundOrder;
 import com.figureerp.module.stock.entity.Shelf;
 import com.figureerp.module.stock.entity.Warehouse;
-import com.figureerp.module.stock.mapper.AreaMapper;
 import com.figureerp.module.stock.mapper.InboundItemMapper;
 import com.figureerp.module.stock.mapper.InboundOrderMapper;
 import com.figureerp.module.stock.mapper.ShelfMapper;
@@ -46,15 +44,14 @@ public class InboundDataInitializer implements ApplicationRunner {
     private final InboundOrderMapper orderMapper;
     private final InboundItemMapper itemMapper;
     private final WarehouseMapper warehouseMapper;
-    private final AreaMapper areaMapper;
     private final ShelfMapper shelfMapper;
     private final FigureProductMapper productMapper;
 
     /** 一条明细种子：货号 + 数量 + 单价 */
     private record ItemSeed(String productCode, int quantity, String unitPrice, String remark) {}
 
-    /** 一张单据种子：仓库代码 / 区域编号 / 货架编号 / 类型 / 状态 / 供应商 / 几天前 / 明细 */
-    private record OrderSeed(String warehouseCode, String areaCode, String shelfCode, String type, String status,
+    /** 一张单据种子：仓库代码 / 货架编号 / 类型 / 状态 / 供应商 / 几天前 / 明细 */
+    private record OrderSeed(String warehouseCode, String shelfCode, String type, String status,
                              String supplier, int daysAgo, String operator, String remark, List<ItemSeed> items) {}
 
     @Override
@@ -68,18 +65,18 @@ public class InboundDataInitializer implements ApplicationRunner {
             }
 
             List<OrderSeed> seeds = List.of(
-                    new OrderSeed("3101", "A", "01-1", InboundType.PURCHASE, InboundStatus.CONFIRMED,
+                    new OrderSeed("3101", "01-1", InboundType.PURCHASE, InboundStatus.CONFIRMED,
                             "Good Smile Company 中国代理", 2, "系统管理员", "双十一预热备货",
                             List.of(new ItemSeed("GSC-001", 5, "520.00", "冬季限定款"),
                                     new ItemSeed("GSC-N123", 20, "180.00", "常规补货"))),
-                    new OrderSeed("3101", "A", "01-2", InboundType.RETURN, InboundStatus.CONFIRMED,
+                    new OrderSeed("3101", "01-2", InboundType.RETURN, InboundStatus.CONFIRMED,
                             "天猫旗舰店退货", 5, "系统管理员", "买家七天无理由退货，外盒轻微压痕",
                             List.of(new ItemSeed("ALTER-220", 2, "880.00", "待质检后重新上架"))),
-                    new OrderSeed("3101", "B", "01-1", InboundType.PURCHASE, InboundStatus.DRAFT,
+                    new OrderSeed("3101", "01-1", InboundType.PURCHASE, InboundStatus.DRAFT,
                             "ALTER 官方渠道", 0, "系统管理员", "待到货清点，暂未确认",
                             List.of(new ItemSeed("SEGA-P07", 8, "460.00", null),
                                     new ItemSeed("FIGMA-R01", 6, "310.00", null))),
-                    new OrderSeed("3101", "B", "01-2", InboundType.TRANSFER, InboundStatus.CONFIRMED,
+                    new OrderSeed("3101", "01-2", InboundType.TRANSFER, InboundStatus.CONFIRMED,
                             "北京库调拨", 12, "系统管理员", "华北仓调拨至上海仓",
                             List.of(new ItemSeed("GSC-002", 10, "500.00", "樱花版转仓")))
             );
@@ -102,7 +99,6 @@ public class InboundDataInitializer implements ApplicationRunner {
                         + String.format("%04d", insertedOrders + 1));
                 order.setInboundType(s.type());
                 order.setWarehouseId(w.getId());
-                order.setAreaId(findAreaId(w.getId(), s.areaCode()));
                 order.setShelfId(findShelfId(w.getId(), s.shelfCode()));
                 order.setSupplier(s.supplier());
                 order.setStatus(s.status());
@@ -166,14 +162,6 @@ public class InboundDataInitializer implements ApplicationRunner {
             // 表没建时不影响应用启动，只提示怎么处理
             log.error("初始化入库单数据失败，请确认已执行 db/schema.sql 建表: {}", e.getMessage());
         }
-    }
-
-    private Long findAreaId(Long warehouseId, String areaCode) {
-        Area area = areaMapper.selectOne(Wrappers.<Area>lambdaQuery()
-                .eq(Area::getWarehouseId, warehouseId)
-                .eq(Area::getAreaCode, areaCode)
-                .last("LIMIT 1"));
-        return area == null ? null : area.getId();
     }
 
     private Long findShelfId(Long warehouseId, String shelfCode) {

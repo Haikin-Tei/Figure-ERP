@@ -27,9 +27,6 @@ public class ShelfQuery {
     @Schema(description = "所属仓库 ID", example = "1")
     private Long warehouseId;
 
-    @Schema(description = "所属区域 ID", example = "1")
-    private Long areaId;
-
     @Schema(description = "状态：A 正常 / B 维护中 / D 停用")
     private String status;
 }

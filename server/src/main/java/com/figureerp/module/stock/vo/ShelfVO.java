@@ -29,12 +29,6 @@ public class ShelfVO {
     @Schema(description = "所属仓库名称")
     private String warehouseName;
 
-    @Schema(description = "所属区域 ID，可空")
-    private Long areaId;
-
-    @Schema(description = "所属区域名称，可空")
-    private String areaName;
-
     @Schema(description = "库位信息，如 01区-1层")
     private String location;
 

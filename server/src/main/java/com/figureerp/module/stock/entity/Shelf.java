@@ -22,9 +22,6 @@ public class Shelf extends BaseEntity {
     /** 所属仓库 warehouse.id */
     private Long warehouseId;
 
-    /** 所属区域 area.id，可空；填写时必须与 warehouseId 属于同一仓库 */
-    private Long areaId;
-
     /** 库位信息，如 01区-1层 */
     private String location;
 

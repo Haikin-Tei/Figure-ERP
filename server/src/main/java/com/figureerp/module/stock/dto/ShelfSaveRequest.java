@@ -27,9 +27,6 @@ public class ShelfSaveRequest {
     @NotNull(message = "请选择所属仓库")
     private Long warehouseId;
 
-    @Schema(description = "所属区域 ID，可空；填写时必须属于同一个仓库", example = "1")
-    private Long areaId;
-
     @Schema(description = "库位信息，如 01区-1层", example = "01区-1层")
     @Size(max = 100, message = "库位信息不能超过 100 个字符")
     private String location;

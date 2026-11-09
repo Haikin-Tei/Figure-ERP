@@ -33,9 +33,6 @@ public class InboundSaveRequest {
     @NotNull(message = "请选择入库仓库")
     private Long warehouseId;
 
-    @Schema(description = "入库区域 ID，可空；须与仓库一致")
-    private Long areaId;
-
     @Schema(description = "入库货架 ID，可空；须与仓库一致")
     private Long shelfId;
 
